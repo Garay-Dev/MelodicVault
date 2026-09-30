@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="java.lang.Class">
+		<item key="replaceBarOpen" value="false"/>
+		<list key="findhistory">
+			<item value="menu"/>
+			<item value="modo"/>
+			<item value="save"/>
+			<item value="findByAlbumesTituloContainingIgnoreCase"/>
+			<item value="registrados"/>
+			<item value="busca"/>
+			<item value="@Valid"/>
+			<item value="form"/>
+			<item value="men"/>
+			<item value="album"/>
+			<item value="action"/>
+			<item value="nuev"/>
+			<item value="edit"/>
+			<item value="elimi"/>
+			<item value="elim"/>
+		</list>
+	</section>
+</section>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<libraryInfos>
+    <libraryInfo home="/usr/lib/jvm/java-21-openjdk" version="21.0.12.1"/>
+    <libraryInfo home="/usr/lib/jvm/java-25-openjdk" version="25.0.4.1"/>
+    <libraryInfo home="/app/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.linux.x86_64_25.0.4.v20260826-0822" version="25.0.4.1">
+        <bootpath>
+            <entry path="null"/>
+        </bootpath>
+        <extensionDirs>
+            <entry path="null"/>
+        </extensionDirs>
+        <endorsedDirs>
+            <entry path="null"/>
+        </endorsedDirs>
+    </libraryInfo>
+    <libraryInfo home="/app/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.linux.x86_64_25.0.4.v20260826-0822/jre" version="25.0.4.1"/>
+    <libraryInfo home="/home/cadeuz/.sdkman/candidates/java/17.0.18-tem" version="17.0.18"/>
+</libraryInfos>
