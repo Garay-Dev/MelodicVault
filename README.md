@@ -29,7 +29,7 @@ Si el paso 5 falla con clases no encontradas (`ClassNotFoundException`, `NoClass
 
 ## Dependencias (`pom.xml`)
 - Agregado `spring-boot-starter-security` (sin versión — hereda del BOM de `spring-boot-starter-parent`).
-- Pendiente agregar: `thymeleaf-extras-springsecurity6` (necesaria para `sec:authorize` en las vistas).
+- Agregado `thymeleaf-extras-springsecurity6` (necesaria para `sec:authorize` en las vistas).
 
 ## Entidades (`modelo`)
 - **`Usuario.java`** (nueva) — `idUsuario`, `username` (único), `password` (hash BCrypt), `rol`.
