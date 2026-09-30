@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<session version="1.0">
-<refactoring comment="Rename compilation unit &apos;pe.cibertec.melodicvault.service.AlbumTransactionalService.java&apos; to &apos;AlbumTransaccionalService.java&apos;&#x0A;- Original project: &apos;MelodicVault&apos;&#x0A;- Original element: &apos;pe.cibertec.melodicvault.service.AlbumTransactionalService.java&apos;&#x0A;- Renamed element: &apos;pe.cibertec.melodicvault.service.AlbumTransaccionalService.java&apos;" description="Rename compilation unit &apos;AlbumTransactionalService.java&apos;" flags="2" id="org.eclipse.jdt.ui.rename.compilationunit" input="/src\/main\/java=/optional=/true=/=/maven.pomderived=/true=/&lt;pe.cibertec.melodicvault.service{AlbumTransactionalService.java" name="AlbumTransaccionalService.java" references="false" stamp="1790527949610" version="1.0"/>
-</session>
