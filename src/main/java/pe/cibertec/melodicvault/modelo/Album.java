@@ -44,7 +44,7 @@ public class Album {
     }
     
     
-    @OneToMany(mappedBy = "album", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "album", cascade = CascadeType.REMOVE)
     @OrderBy("numeroPista ASC")
     private List<Cancion> canciones;
 
