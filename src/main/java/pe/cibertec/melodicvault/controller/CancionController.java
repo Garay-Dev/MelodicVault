@@ -13,6 +13,10 @@ import pe.cibertec.melodicvault.interfacesService.IAlbumService;
 import pe.cibertec.melodicvault.interfacesService.ICancionService;
 import pe.cibertec.melodicvault.modelo.Cancion;
 
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
+
+
 @Controller
 @RequestMapping("/canciones")
 public class CancionController {
@@ -51,13 +55,23 @@ public class CancionController {
 
     @PostMapping("/guardar")
     public String guardar(@Valid Cancion cancion, BindingResult result, Model model, RedirectAttributes flash) {
-        if (result.hasErrors()) {
+    	if (cancion.getAlbum() == null || cancion.getAlbum().getIdAlbum() == null) {
+    	    result.rejectValue("album", "requerido", "Debe seleccionar un álbum");
+    	}
+    	if (result.hasErrors()) {
             model.addAttribute("albumes", albumService.listar());
             model.addAttribute("modo", cancion.getIdCancion() == null ? "registrar" : "editar");
             return "form-cancion";
         }
         boolean esNueva = cancion.getIdCancion() == null;
-        service.save(cancion);
+        try {
+            service.save(cancion);
+        } catch (DataAccessException e) {
+            result.rejectValue("numeroPista", "duplicado", "No se pudo guardar. Revisa que la pista no esté repetida en este álbum.");
+            model.addAttribute("albumes", albumService.listar());
+            model.addAttribute("modo", cancion.getIdCancion() == null ? "registrar" : "editar");
+            return "form-cancion";
+        }
         flash.addFlashAttribute("mensaje",
                 esNueva ? "Canción registrada correctamente." : "Canción actualizada correctamente.");
         return "redirect:/canciones";

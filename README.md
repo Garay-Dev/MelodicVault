@@ -91,6 +91,142 @@ Si el paso 5 falla con clases no encontradas (`ClassNotFoundException`, `NoClass
 - Creado `.gitignore` en la raíz del proyecto `(Maven target/, metadata de Eclipse/IntelliJ/VS Code, logs, zips)`.
 
 
+# Cambios realizados v2
+
+Este documento resume los cambios de lógica hechos en MelodicVault (entidad, base de datos y controllers) y la razón de cada uno. No incluye cambios de estilos ni de plantillas.
+
+---
+
+## 1. Restricción de pista única por álbum (entidad `Cancion`)
+
+**Qué se cambió**
+
+Se agregó una restricción única compuesta sobre `id_album` y `numero_pista` en la entidad:
+
+```java
+@Entity
+@Table(name = "cancion",
+       uniqueConstraints = { @UniqueConstraint(columnNames = {"id_album", "numero_pista"}) })
+public class Cancion { ... }
+```
+
+Requiere el import `jakarta.persistence.UniqueConstraint`.
+
+**Por qué**
+
+- Sin esta restricción se podían registrar dos canciones con el mismo número de pista dentro de un mismo álbum, lo que deja el listado del álbum incoherente.
+- La unicidad se definió **por álbum** y no sobre `numero_pista` a secas. Con `@Column(unique = true)` en ese campo, la pista 1 del álbum A habría bloqueado la pista 1 del álbum B, que es un caso totalmente válido.
+- Se escribió con llaves `{ @UniqueConstraint(...) }` y con el import correcto de `jakarta.persistence`, porque sin el import el compilador rechazaba la anotación.
+
+---
+
+## 2. Restricción incluida en el script SQL
+
+**Qué se cambió**
+
+Se modificó el script `bd_melodicvault` para que la restricción esté dentro del `CREATE TABLE cancion`, y se volvió a correr el script completo:
+
+```sql
+CREATE TABLE cancion (
+    id_cancion         INT AUTO_INCREMENT PRIMARY KEY,
+    titulo             VARCHAR(100) NOT NULL,
+    numero_pista       INT          NOT NULL,
+    duracion_segundos  INT,
+    id_album           INT          NOT NULL,
+    CONSTRAINT fk_cancion_album FOREIGN KEY (id_album) REFERENCES album(id_album)
+        ON DELETE CASCADE,
+    CONSTRAINT uq_cancion_album_pista UNIQUE (id_album, numero_pista)
+);
+```
+
+**Por qué**
+
+- La base de datos es la que garantiza de verdad la unicidad. La anotación de la entidad documenta la regla, pero con `ddl-auto=update` Hibernate no es fiable para crear o modificar restricciones sobre tablas que ya existen.
+- Al estar la restricción dentro del `CREATE TABLE`, quien ejecute el script desde cero obtiene la base completa, sin pasos manuales adicionales.
+- Los nombres de columna (`id_album`, `numero_pista`) coinciden con los de la entidad.
+- Los datos de prueba del script no violan la restricción: cada álbum tiene sus pistas sin repetir.
+
+---
+
+## 3. Validación y manejo de errores en `CancionController`
+
+**Qué se cambió**
+
+En `guardar` se agregaron dos cosas.
+
+Primero, una validación para que no se pueda guardar sin elegir álbum:
+
+```java
+if (cancion.getAlbum() == null || cancion.getAlbum().getIdAlbum() == null) {
+    result.rejectValue("album", "requerido", "Debe seleccionar un álbum");
+}
+```
+
+Segundo, el `service.save(cancion)` se envolvió en un `try/catch`:
+
+```java
+try {
+    service.save(cancion);
+} catch (DataAccessException e) {
+    result.rejectValue("numeroPista", "duplicado",
+            "No se pudo guardar. Revisa que la pista no esté repetida en este álbum.");
+    model.addAttribute("albumes", albumService.listar());
+    model.addAttribute("modo", cancion.getIdCancion() == null ? "registrar" : "editar");
+    return "form-cancion";
+}
+```
+
+Requiere el import `org.springframework.dao.DataAccessException`.
+
+**Por qué**
+
+- Si el usuario deja "Selecciona un álbum", Spring crea igual un objeto `Album` vacío (con `idAlbum` nulo), por lo que `@NotNull` sobre `album` no lo detecta y el guardado fallaba. La validación manual lo cubre y muestra el mensaje bajo el campo.
+- Con la restricción activa en la base, guardar una pista repetida lanza una excepción. Sin el `catch`, el usuario veía una página de error 500.
+- Se captura `DataAccessException`, la clase padre de las excepciones de acceso a datos de Spring, porque Spring puede traducir el error de la base a distintos tipos (`DataIntegrityViolationException`, `JpaSystemException`, etc.). Así el `catch` no depende de cuál de ellos salga.
+- Al devolver la vista `form-cancion` con el mismo objeto `cancion` (en lugar de redirigir), el formulario conserva lo que el usuario escribió y el mensaje aparece bajo el campo "Número de pista" para que lo corrija. También se conservan la lista de álbumes y el modo (registrar o editar).
+- Editar una canción sin cambiar su número de pista sigue funcionando, porque la actualización es sobre el mismo registro.
+
+---
+
+## 4. Manejo de errores en `AlbumCompletoController`
+
+**Qué se cambió**
+
+En `guardar`, el bloque `try` ahora tiene dos `catch` separados:
+
+```java
+try {
+    transaccionalService.registrarAlbumConCanciones(form.getAlbum(), validas);
+} catch (IllegalArgumentException e) {
+    model.addAttribute("error", "No se guardó nada: " + e.getMessage());
+    model.addAttribute("bandas", bandaService.listar());
+    return "form-album-completo";
+} catch (DataAccessException e) {
+    model.addAttribute("error", "No se guardó nada: revisa que no haya pistas repetidas en el álbum.");
+    model.addAttribute("bandas", bandaService.listar());
+    return "form-album-completo";
+}
+```
+
+Requiere el import `org.springframework.dao.DataAccessException`.
+
+**Por qué**
+
+- El `catch` original trataba `ConstraintViolationException`, que no cumplía su función: al pasar por los repositorios de Spring Data, las excepciones de Hibernate se traducen a la jerarquía `DataAccessException`, así que ese `catch` nunca se activaba. Además, si el import era `jakarta.validation`, correspondía a la validación de beans y no a la restricción `UNIQUE` de MySQL.
+- Los `catch` están separados para mostrar un mensaje fijo y limpio en el caso de duplicados. Mostrar `e.getMessage()` ahí expondría al usuario el texto técnico del error SQL.
+- `registrarAlbumConCanciones` es `@Transactional`, por lo que si una canción falla, el rollback deshace también el álbum que ya se había guardado. El mensaje "No se guardó nada" es cierto.
+
+---
+
+## Resumen
+
+- **`uniqueConstraints` (`id_album`, `numero_pista`)** en `Cancion.java`: evita pistas repetidas en un mismo álbum sin bloquearlas entre álbumes distintos.
+- **Restricción dentro del `CREATE TABLE cancion`** en el script SQL: la base garantiza la regla y el script corre completo, sin pasos extra.
+- **Validación de álbum obligatorio** en `CancionController`: evita guardar una canción sin álbum seleccionado.
+- **`catch (DataAccessException)`** en `CancionController`: muestra el error en el campo, conservando los datos del formulario, en vez de un error 500.
+- **`catch` separados para `IllegalArgumentException` y `DataAccessException`** en `AlbumCompletoController`: mensaje limpio para el usuario y rollback completo si algo falla.
+
+
 
 ## Correcciones de bugs encontrados en el camino
 - `UsuarioDetailsService`: faltaban imports de `UsernameNotFoundException` y `User`.
@@ -98,11 +234,4 @@ Si el paso 5 falla con clases no encontradas (`ClassNotFoundException`, `NoClass
 - `estadisticasPorBanda()`: estaba mal ubicada en `IBanda` (la query es `FROM Album`); movida a `IAlbum`.
 - Script SQL: faltaban las tablas `banda`/`album` en el script que solo tenía `usuario`/`cancion`, y el `DROP DATABASE` inicial las borraba sin recrearlas.
 
-## Pendiente
-
-- **2 reportes con JasperReports** (bandas y álbumes/canciones) — único ítem de código pesado que queda.
-- Despliegue en Microsoft Azure + workflow de GitHub Actions.
-- Documentación de Maven para el informe (`mvn dependency:tree`, explicación del `pom.xml` y el BOM).
-- Diagramas de casos de uso, modelo de base de datos, video demo reel.
-- Secciones narrativas del informe (resumen, introducción, diagnóstico SEPTE/PEST, justificación, metodología).
 

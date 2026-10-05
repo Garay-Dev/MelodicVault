@@ -43,7 +43,8 @@ CREATE TABLE cancion (
     duracion_segundos  INT,
     id_album           INT          NOT NULL,
     CONSTRAINT fk_cancion_album FOREIGN KEY (id_album) REFERENCES album(id_album)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT uq_cancion_album_pista UNIQUE (id_album, numero_pista)
 );
 
 -- ============ DATOS ============
