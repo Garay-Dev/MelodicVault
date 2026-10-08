@@ -235,3 +235,197 @@ Requiere el import `org.springframework.dao.DataAccessException`.
 - Script SQL: faltaban las tablas `banda`/`album` en el script que solo tenía `usuario`/`cancion`, y el `DROP DATABASE` inicial las borraba sin recrearlas.
 
 
+# Cambios realizados v3
+
+Este documento resume los cambios hechos en MelodicVault para incorporar el **registro de usuarios** (seguridad, repositorio, DTO, controller y plantillas) y la razón de cada uno. A diferencia de la v2, incluye las plantillas `registro.html` y `login.html` porque son parte necesaria del flujo.
+
+---
+
+## 1. Ruta `/registro` pública en `SecurityConfig`
+
+**Qué se cambió**
+
+Se agregó `/registro` a la lista de rutas públicas:
+
+```java
+.requestMatchers("/", "/acerca", "/bandas", "/albumes", "/canciones", "/*/detalle/**", "/registro").permitAll()
+```
+
+**Por qué**
+
+- La regla final `.anyRequest().authenticated()` bloqueaba `/registro` para quien no tenía sesión. Spring Security lo interceptaba y lo redirigía a `/login`, así que el enlace "Regístrate" parecía llevar al mismo login y el controller nunca se ejecutaba.
+- Sin método explícito, `permitAll()` cubre el `GET` (formulario) y el `POST` (envío).
+- El `POST` debe ir a `/registro` y **no** a `/registro/guardar`: la regla `/*/guardar` exige rol `ADMIN` y lo bloquearía.
+
+---
+
+## 2. Método `existsByUsername` en `IUsuario`
+
+**Qué se cambió**
+
+```java
+boolean existsByUsername(String username);
+```
+
+**Por qué**
+
+- Permite comprobar si el usuario ya existe antes de guardar, para mostrar un mensaje claro en el campo en lugar de un error de base de datos.
+- Spring Data genera la consulta a partir del nombre del método; sin esta declaración el controller no compila.
+
+---
+
+## 3. Nuevo DTO `RegistroForm`
+
+**Qué se cambió**
+
+Se creó la clase `RegistroForm` (paquete `dto`) con tres campos y sus validaciones:
+
+```java
+public class RegistroForm {
+    @NotBlank(message = "El usuario es obligatorio")
+    @Size(min = 4, max = 50, message = "Entre 4 y 50 caracteres")
+    @Pattern(regexp = "^[A-Za-z0-9_.-]*$", message = "Solo letras, números, punto, guion y guion bajo")
+    private String username;
+
+    @NotBlank(message = "La contraseña es obligatoria")
+    @Size(min = 6, max = 72, message = "Entre 6 y 72 caracteres")
+    private String password;
+
+    @NotBlank(message = "Confirma la contraseña")
+    private String confirmar;
+
+    // getters y setters
+}
+```
+
+**Por qué**
+
+- Se usa un DTO y **no** la entidad `Usuario` directamente. Si el formulario recibiera un `Usuario`, cualquiera podría enviar `rol=ADMIN` en el `POST` y convertirse en administrador. El DTO no tiene campo `rol`, así que ese dato nunca llega desde el navegador.
+- El máximo de 72 caracteres en la contraseña responde al límite de BCrypt (72 bytes).
+- El campo `confirmar` solo existe en el formulario; no se guarda en la base.
+
+---
+
+## 4. Nuevo `RegistroController`
+
+**Qué se cambió**
+
+```java
+@Controller
+public class RegistroController {
+    @Autowired private IUsuario repo;
+    @Autowired private PasswordEncoder encoder;
+
+    @GetMapping("/registro")
+    public String form(Model model) {
+        model.addAttribute("registroForm", new RegistroForm());
+        return "registro";
+    }
+
+    @PostMapping("/registro")
+    public String registrar(@Valid @ModelAttribute("registroForm") RegistroForm form,
+                            BindingResult result, RedirectAttributes flash) {
+
+        if (!result.hasErrors() && !form.getPassword().equals(form.getConfirmar()))
+            result.rejectValue("confirmar", "nocoincide", "Las contraseñas no coinciden");
+
+        if (!result.hasErrors() && repo.existsByUsername(form.getUsername()))
+            result.rejectValue("username", "duplicado", "Ese usuario ya existe");
+
+        if (result.hasErrors()) return "registro";
+
+        Usuario u = new Usuario();
+        u.setUsername(form.getUsername());
+        u.setPassword(encoder.encode(form.getPassword()));
+        u.setRol("LECTOR");
+
+        try {
+            repo.save(u);
+        } catch (DataIntegrityViolationException e) {
+            result.rejectValue("username", "duplicado", "Ese usuario ya existe");
+            return "registro";
+        }
+
+        flash.addFlashAttribute("exito", "Cuenta creada. Ya puedes iniciar sesión.");
+        return "redirect:/login";
+    }
+}
+```
+
+**Por qué**
+
+- Las comprobaciones de coincidencia de contraseñas y de usuario duplicado solo se hacen si no hay errores previos de validación, para no mostrar mensajes encadenados.
+- La contraseña se guarda siempre con `BCryptPasswordEncoder`, nunca en texto plano.
+- El rol se fija en el servidor como `LECTOR`, **sin** el prefijo `ROLE_` (Spring lo agrega con `roles(...)` en `UsuarioDetailsService`). Como el sistema solo distingue `ADMIN` en `SecurityConfig`, `LECTOR` no recibe permisos de mantenimiento.
+- El `try/catch` de `DataIntegrityViolationException` cubre una condición de carrera: si otra persona registra el mismo usuario entre el `existsByUsername` y el `save`, la restricción `UNIQUE` de `username` rechaza el segundo y el usuario ve el mensaje en el campo en vez de un error 500.
+- Al registrar con éxito se redirige a `/login` con un mensaje flash, siguiendo el patrón `POST → redirect` del resto del sistema.
+- Cuando hay errores se devuelve la vista `registro` (sin redirigir) para conservar el nombre de usuario escrito y mostrar los mensajes bajo cada campo.
+
+---
+
+## 5. Nueva plantilla `registro.html`
+
+**Qué se cambió**
+
+Se creó `src/main/resources/templates/registro.html` con el mismo `<head>`, cabecera y pie que `login.html`, y este formulario en el `<main>`:
+
+```html
+<form th:action="@{/registro}" th:object="${registroForm}" method="post">
+    <input type="text"     th:field="*{username}"  class="form-control input-vault" autofocus>
+    <div class="text-danger small" th:if="${#fields.hasErrors('username')}" th:errors="*{username}"></div>
+
+    <input type="password" th:field="*{password}"  class="form-control input-vault">
+    <div class="text-danger small" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+
+    <input type="password" th:field="*{confirmar}" class="form-control input-vault">
+    <div class="text-danger small" th:if="${#fields.hasErrors('confirmar')}" th:errors="*{confirmar}"></div>
+
+    <a th:href="@{/login}" class="btn-cancelar">Cancelar</a>
+    <button type="submit" class="btn-guardar">Crear cuenta</button>
+</form>
+```
+
+**Por qué**
+
+- `th:action="@{/registro}"` incluye automáticamente el token CSRF; con `action="/registro"` a secas el `POST` daría 403.
+- `th:object` y `th:field` enlazan el formulario con `RegistroForm` y permiten mostrar los errores con `th:errors`.
+- Thymeleaf no vuelve a rellenar los campos `type="password"`: si hay un error, el usuario reescribe las contraseñas, que es el comportamiento correcto.
+- El botón **Cancelar** devuelve a `/login`.
+
+
+---
+
+## 6. Cambios en `login.html`
+
+**Qué se cambió**
+
+Debajo del alert de error, el mensaje de éxito:
+
+```html
+<div class="alert alert-success" th:if="${exito}" th:text="${exito}"></div>
+```
+
+Debajo del formulario, el enlace al registro:
+
+```html
+<p class="mt-3 text-center">¿No tienes cuenta? <a th:href="@{/registro}">Regístrate</a></p>
+```
+
+**Por qué**
+
+- El mensaje flash `exito` enviado por `RegistroController` solo se ve si `login.html` lo muestra.
+- El enlace es la puerta de entrada al registro. Opcionalmente puede añadirse también en el menú con `sec:authorize="!isAuthenticated()"`.
+
+
+---
+
+## Resumen
+
+- `/registro` agregado a `permitAll()` en `SecurityConfig`: evita la redirección al login; el `POST` va a `/registro`, no a `/registro/guardar`.
+- `existsByUsername` en `IUsuario`: permite detectar usuarios duplicados antes de guardar.
+- `RegistroForm` (DTO): valida usuario y contraseñas, y evita que alguien se asigne el rol `ADMIN` desde el formulario.
+- `RegistroController`: valida, cifra la contraseña con BCrypt, fija el rol `LECTOR` y maneja la carrera de usuarios duplicados.
+- `registro.html`: formulario con CSRF, errores por campo y contraseñas que no se rellenan.
+- `login.html`: muestra el mensaje de éxito y enlaza a "Regístrate".
+
+
