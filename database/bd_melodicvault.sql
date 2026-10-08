@@ -90,7 +90,7 @@ INSERT INTO usuario (username, password, rol) VALUES
 
 -- clave del admin : admin123
 
-('lector', '$2b$10$DQuGrGBMFRwENahhD4sQ.uEe4hfvlGi/RHImkPataPw.MNhm6iFBm', 'USER');
+('lector', '$2b$10$DQuGrGBMFRwENahhD4sQ.uEe4hfvlGi/RHImkPataPw.MNhm6iFBm', 'LECTOR');
 
 -- clave del lector : lector123
 

@@ -23,7 +23,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(auth -> auth
         		.requestMatchers("/css/**", "/img/**", "/js/**").permitAll()
-        		.requestMatchers("/", "/acerca", "/bandas", "/albumes", "/canciones", "/*/detalle/**").permitAll()
+        		.requestMatchers("/", "/acerca", "/bandas", "/albumes", "/canciones", "/*/detalle/**", "/registro").permitAll()
         		.requestMatchers("/*/nuevo", "/*/editar/**", "/*/guardar", "/*/eliminar/**", "/albumes/completo/**").hasRole("ADMIN")
         		.anyRequest().authenticated())
             .formLogin(f -> f.loginPage("/login").permitAll())
