@@ -29,6 +29,7 @@ public class Banda {
     private Integer anioFormacion;
 
     @NotBlank(message = "El estado es obligatorio")
+    @Size(max = 20)
     private String estado;
 
     @Size(max = 500)
@@ -36,11 +37,7 @@ public class Banda {
 
     private String imagenUrl;
 
-    @OneToMany(
-            mappedBy = "banda",
-            cascade = CascadeType.ALL,
-            fetch = FetchType.EAGER
-    )
+    @OneToMany(mappedBy = "banda", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Album> albumes;
 
     public Integer getIdBanda() {

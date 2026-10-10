@@ -16,4 +16,7 @@ public interface IAlbumService {
     void delete(int id);
     
     List<Album> buscar(String texto);
+    
+    List<Object[]> estadisticas();
+    
 }
