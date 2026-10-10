@@ -28,6 +28,7 @@ public class AlbumService implements IAlbumService {
 
     @Override
     public int save(Album a) {
+    	
         int res = 0;
         Album album = data.save(a);
 
@@ -49,4 +50,10 @@ public class AlbumService implements IAlbumService {
                 texto, texto, texto
         );
     }
+    
+    @Override
+    public List<Object[]> estadisticas() {
+        return data.estadisticasPorBanda();
+    }
+    
 }

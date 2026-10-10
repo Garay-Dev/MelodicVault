@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<html lang="es" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>Melodic Vault</title>
@@ -19,7 +19,13 @@
 		    <a th:href="@{/}">Inicio</a>
 		    <a th:href="@{/bandas}">Bandas</a>
 		    <a th:href="@{/albumes}">Álbumes</a>
+		    <a th:href="@{/canciones}">Canciones</a>
 		    <a th:href="@{/acerca}">Acerca de</a>
+
+		    <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+		    <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="form-salir">
+		        <button type="submit">Salir (<span sec:authentication="name">usuario</span>)</button>
+		    </form>
 		</div>
     </nav>
 
@@ -125,6 +131,31 @@
 		</div>
 		
     </section>
+	
+	<section class="seccion">
+	    <h2>Estadísticas por banda</h2>
+
+	    <div class="vacio" th:if="${estadisticas.isEmpty()}">
+	        <p>Aún no hay datos para mostrar.</p>
+	    </div>
+
+	    <table class="table table-dark table-striped align-middle" th:if="${!estadisticas.isEmpty()}">
+	        <thead>
+	            <tr>
+	                <th>Banda</th>
+	                <th>Álbumes</th>
+	                <th>Rating promedio</th>
+	            </tr>
+	        </thead>
+	        <tbody>
+	            <tr th:each="e : ${estadisticas}">
+	                <td th:text="${e[0]}">Banda</td>
+	                <td th:text="${e[1]}">0</td>
+	                <td th:text="${e[2] != null ? #numbers.formatDecimal(e[2], 1, 1) : '—'}">0.0</td>
+	            </tr>
+	        </tbody>
+	    </table>
+	</section>
 
 </main>
 
