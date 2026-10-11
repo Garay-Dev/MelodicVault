@@ -1,5 +1,6 @@
 package pe.cibertec.melodicvault.service;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import net.sf.jasperreports.engine.JRException;
 import net.sf.jasperreports.engine.JasperCompileManager;
 import net.sf.jasperreports.engine.JasperExportManager;
@@ -24,50 +26,60 @@ import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 @Service
 public class ReporteService {
 
-	  @Autowired private IAlbumService albumService;
-	  @Autowired private IBandaService bandaService;
-	  
+    @Autowired private IAlbumService albumService;
+    @Autowired private IBandaService bandaService;
 
-	    public byte[] exportarCancionesAlbum(int idAlbum) throws JRException {
-	        Album album = albumService.listarId(idAlbum)
-	                .orElseThrow(() -> new IllegalArgumentException("El álbum no existe"));
+    private JasperReport reporteCanciones;
+    private JasperReport reporteAlbumes;
 
-	        List<Cancion> canciones = albumService.listadoDeCanciones(idAlbum);
+    @PostConstruct
+    public void compilarReportes() {
+        reporteCanciones = compilar("/reportes/reporte_canciones.jrxml");
+        reporteAlbumes   = compilar("/reportes/reporte_albumes.jrxml");
+    }
 
-	        Map<String, Object> params = new HashMap<>();
-	        params.put("albumTitulo", album.getTitulo());
-	        params.put("bandaNombre", album.getBanda().getNombre());
+    private JasperReport compilar(String ruta) {
+        try (InputStream in = getClass().getResourceAsStream(ruta)) {
+            if (in == null) {
+                throw new IllegalStateException("No se encontró la plantilla: " + ruta);
+            }
+            return JasperCompileManager.compileReport(in);
+        } catch (JRException | IOException e) {
+            throw new IllegalStateException("No se pudo compilar " + ruta, e);
+        }
+    }
 
-	        InputStream plantilla = getClass()
-	                .getResourceAsStream("/reportes/reporte_canciones.jrxml");
-	        JasperReport report = JasperCompileManager.compileReport(plantilla);
+    public byte[] exportarCancionesAlbum(int idAlbum) throws JRException {
+        Album album = albumService.listarId(idAlbum)
+                .orElseThrow(() -> new IllegalArgumentException("El álbum no existe"));
 
-	        JasperPrint print = JasperFillManager.fillReport(
-	                report, params, new JRBeanCollectionDataSource(canciones));
+        List<Cancion> canciones = albumService.listadoDeCanciones(idAlbum);
 
-	        return JasperExportManager.exportReportToPdf(print);
-	    }
-	    
-	    public byte[] exportarAlbumesBanda(int idBanda) throws JRException {
-	        Banda banda = bandaService.listarId(idBanda)
-	                .orElseThrow(() -> new IllegalArgumentException("La banda no existe"));
+        Map<String, Object> params = new HashMap<>();
+        params.put("albumTitulo", album.getTitulo());
+        params.put("bandaNombre", album.getBanda().getNombre());
 
-	        List<Album> albumes = banda.getAlbumes();
+        JasperPrint print = JasperFillManager.fillReport(
+                reporteCanciones, params, new JRBeanCollectionDataSource(canciones));
 
-	        Map<String, Object> params = new HashMap<>();
-	        params.put("bandaNombre", banda.getNombre());
-	        params.put("pais", banda.getPais());
-	        params.put("genero", banda.getGenero());
-	        params.put("anioFormacion", banda.getAnioFormacion());
+        return JasperExportManager.exportReportToPdf(print);
+    }
 
-	        InputStream plantilla = getClass()
-	                .getResourceAsStream("/reportes/reporte_albumes.jrxml");
-	        JasperReport report = JasperCompileManager.compileReport(plantilla);
+    public byte[] exportarAlbumesBanda(int idBanda) throws JRException {
+        Banda banda = bandaService.listarId(idBanda)
+                .orElseThrow(() -> new IllegalArgumentException("La banda no existe"));
 
-	        JasperPrint print = JasperFillManager.fillReport(
-	                report, params, new JRBeanCollectionDataSource(albumes));
+        List<Album> albumes = banda.getAlbumes();
 
-	        return JasperExportManager.exportReportToPdf(print);
-	    }
-	    
+        Map<String, Object> params = new HashMap<>();
+        params.put("bandaNombre", banda.getNombre());
+        params.put("pais", banda.getPais());
+        params.put("genero", banda.getGenero());
+        params.put("anioFormacion", banda.getAnioFormacion());
+
+        JasperPrint print = JasperFillManager.fillReport(
+                reporteAlbumes, params, new JRBeanCollectionDataSource(albumes));
+
+        return JasperExportManager.exportReportToPdf(print);
+    }
 }
