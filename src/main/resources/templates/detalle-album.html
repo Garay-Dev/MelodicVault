@@ -82,6 +82,12 @@
                 <a th:href="@{/bandas/detalle/{id}(id=${album.banda.idBanda})}" class="btn-principal">
                     Ver banda
                 </a>
+				
+				<a sec:authorize="isAuthenticated()"
+				   th:href="@{/reportes/album/{id}(id=${album.idAlbum})}"
+				   target="_blank" class="btn btn-outline-warning">
+				   <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+				</a>
             </div>
         </section>
 
