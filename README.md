@@ -428,4 +428,211 @@ Debajo del formulario, el enlace al registro:
 - `registro.html`: formulario con CSRF, errores por campo y contraseñas que no se rellenan.
 - `login.html`: muestra el mensaje de éxito y enlaza a "Regístrate".
 
+# Cambios realizados v4
 
+Este documento resume los cambios hechos en MelodicVault para incorporar **reportes PDF con JasperReports** y la razón de cada uno. La v3 cubrió el registro de usuarios y el login; la v4 cubre solo el módulo de reportes.
+
+**Resultado:** cualquier usuario con sesión (Administrador o Lector) puede descargar dos reportes en PDF:
+
+| Reporte | Ruta | Se descarga desde |
+|---|---|---|
+| Canciones de un álbum | `/reportes/album/{id}` | Detalle de álbum |
+| Álbumes de una banda | `/reportes/banda/{id}` | Detalle de banda |
+
+---
+
+## 1. Dependencias de JasperReports en el `pom.xml`
+
+**Qué se cambió**
+
+```xml
+<dependency>
+    <groupId>net.sf.jasperreports</groupId>
+    <artifactId>jasperreports</artifactId>
+    <version>6.20.6</version>
+</dependency>
+<dependency>
+    <groupId>net.sf.jasperreports</groupId>
+    <artifactId>jasperreports-fonts</artifactId>
+    <version>6.20.6</version>
+</dependency>
+```
+
+**Por qué**
+
+- Se usa la serie 6.x porque es estable con Spring Boot 3.3.4 y Java 17, y la 7.x cambió la estructura de módulos y el formato del `.jrxml`.
+- `jasperreports-fonts` evita el error "Could not load the following font: DejaVu Sans" al exportar a PDF.
+
+---
+
+## 2. Consulta de canciones por álbum en `IAlbum`
+
+**Qué se cambió**
+
+```java
+@Query("SELECT c FROM Cancion c WHERE c.album.idAlbum = :id ORDER BY c.numeroPista")
+List<Cancion> listadoDeCanciones(@Param("id") int id);
+```
+
+Se declaró en `IAlbumService` y se implementó en `AlbumService`:
+
+```java
+@Override
+public List<Cancion> listadoDeCanciones(int id) {
+    return data.listadoDeCanciones(id);
+}
+```
+
+**Por qué**
+
+- Trae solo las canciones del álbum pedido, ordenadas por número de pista, no toda la tabla.
+- JPQL usa el nombre de la **entidad** (`Cancion`) y sus atributos (`idAlbum`, `numeroPista`), no los de la tabla.
+- Devuelve una `List`, no un `Optional`, porque un álbum tiene varias canciones.
+- `AlbumService` solo entrega datos; la lógica del reporte vive en otro service.
+
+---
+
+## 3. Nuevo `ReporteService`
+
+**Qué se cambió**
+
+Se creó un service dedicado con un método por reporte:
+
+```java
+public byte[] exportarCancionesAlbum(int idAlbum) throws JRException { ... }
+public byte[] exportarAlbumesBanda(int idBanda) throws JRException { ... }
+```
+
+Cada método:
+
+1. Busca la entidad (`Album` o `Banda`) y lanza `IllegalArgumentException` si no existe.
+2. Arma el mapa de **parámetros** (título, banda, país, género, año).
+3. Compila el `.jrxml` desde `/reportes/...`.
+4. Llena el reporte con `JRBeanCollectionDataSource` y exporta con `JasperExportManager.exportReportToPdf`.
+5. Devuelve el PDF como `byte[]`.
+
+**Por qué**
+
+- Separa responsabilidades: `AlbumService` y `BandaService` hacen CRUD; `ReporteService` genera documentos.
+- Un tercer reporte solo agrega otro método aquí, sin tocar los demás services.
+- Los nombres de los `<field>` del `.jrxml` coinciden con los atributos de las entidades (`numeroPista`, `titulo`, `duracionSegundos`, `anio`, `tipo`, `rating`).
+
+---
+
+## 4. Nuevo `ReporteController`
+
+**Qué se cambió**
+
+```java
+@Controller
+@RequestMapping("/reportes")
+public class ReporteController {
+
+    @GetMapping("/album/{id}")
+    public ResponseEntity<byte[]> reporteAlbum(@PathVariable int id) throws JRException { ... }
+
+    @GetMapping("/banda/{id}")
+    public ResponseEntity<byte[]> reporteBanda(@PathVariable int id) throws JRException { ... }
+}
+```
+
+Ambos devuelven `Content-Type: application/pdf` con `Content-Disposition: inline`.
+
+**Por qué**
+
+- El controller solo recibe el id y delega; no tiene lógica de reporte.
+- `inline` abre el PDF en el navegador en lugar de forzar la descarga.
+- Es un controller aparte porque `AlbumController` y `BandaController` ya tienen su CRUD.
+
+---
+
+## 5. Seguridad: sin cambios en `SecurityConfig`
+
+**Qué se verificó**
+
+Las rutas `/reportes/album/{id}` y `/reportes/banda/{id}` no coinciden con ninguna regla específica:
+
+- `/*/detalle/**`: el segundo segmento no es `detalle`.
+- `/*/nuevo`, `/*/editar/**`, `/*/guardar`, `/*/eliminar/**`, `/albumes/completo/**`: tampoco.
+
+**Por qué**
+
+- Caen en `anyRequest().authenticated()`: entran **ADMIN y LECTOR**, y quien no tiene sesión es enviado a `/login`.
+- Regla a recordar: el segundo segmento de una ruta de reportes no debe llamarse `detalle`, `nuevo`, `editar`, `guardar` ni `eliminar`.
+
+---
+
+## 6. Plantillas de reporte `.jrxml`
+
+**Qué se cambió**
+
+Se crearon en `src/main/resources/reportes/`:
+
+| Archivo | Contenido |
+|---|---|
+| `reporte_canciones.jrxml` | Título del álbum, banda y tabla Pista / Título / Duración |
+| `reporte_albumes.jrxml` | Banda, país, género, año de formación y tabla Año / Título / Tipo / Rating |
+
+**Detalles de diseño**
+
+- Estilo común `celda`, con borde de 0.5 y relleno lateral, para que la tabla tenga cuadros bien definidos.
+- Cabecera de columnas en gris con texto en negrita.
+- Pie de página con "Melodic Vault - Página N".
+- La duración se guarda en segundos y se muestra como `m:ss` (por ejemplo, 245 s → `4:05`); si es nula, muestra `-`.
+- El rating se muestra con un decimal; si es nulo, muestra `-`.
+- `whenNoDataType="AllSectionsNoDetail"` en el reporte de álbumes: una banda sin álbumes genera un PDF con título y cabecera, en vez de un error.
+- Un solo `<detail>` por reporte: Jasper no acepta dos.
+
+---
+
+## 7. Botones "Descargar PDF" en las vistas
+
+**Qué se cambió**
+
+En `detalle-album.html` y `detalle-banda.html`:
+
+```html
+<a sec:authorize="isAuthenticated()"
+   th:href="@{/reportes/banda/{id}(id=${banda.idBanda})}"
+   target="_blank" class="btn-secundario">
+    Descargar PDF
+</a>
+```
+
+**Por qué**
+
+- `isAuthenticated()` y no `hasRole('ADMIN')`: el Lector también debe poder descargar.
+- Quien no inició sesión no ve el botón.
+- `target="_blank"` abre el PDF en otra pestaña y no saca al usuario del catálogo.
+- El botón solo oculta la opción; el bloqueo real lo hace el servidor.
+
+---
+
+## 8. Problemas encontrados y cómo se resolvieron
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `JRBeanCollectionDataSource` en rojo | Faltaba el import del subpaquete `data` | `import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;` |
+| `@PathVariable` y `MediaType` en rojo | Imports faltantes en el controller | Importar de `org.springframework.web.bind.annotation` y `org.springframework.http` |
+| `BindException: La dirección ya se está usando` | Otra ejecución de la app ocupaba el puerto 8090 | Terminar la ejecución anterior antes de volver a correr |
+| Error 500 al abrir el reporte | El `.jrxml` tenía dos bloques `<detail>` | Dejar solo el que usa `style="celda"` |
+
+---
+
+## Limitaciones conocidas
+
+- El `.jrxml` se compila en **cada petición**. Para este proyecto es suficiente; en producción se guardaría el `JasperReport` compilado en un campo y se reutilizaría.
+- `banda.getAlbumes()` es una relación `LAZY`: funciona porque Spring Boot mantiene activo `open-in-view` por defecto. Si se desactiva, habría que cargar la colección dentro de una transacción.
+- Los reportes se exportan solo a PDF.
+
+---
+
+## Resumen
+
+- **pom.xml:** `jasperreports` y `jasperreports-fonts` 6.20.6.
+- **IAlbum / AlbumService:** `listadoDeCanciones(id)` con JPQL ordenado por pista.
+- **ReporteService:** un método por reporte que compila, llena y exporta a PDF.
+- **ReporteController:** `/reportes/album/{id}` y `/reportes/banda/{id}`.
+- **SecurityConfig:** sin cambios; las rutas exigen sesión y sirven a ADMIN y LECTOR.
+- **`reporte_canciones.jrxml` y `reporte_albumes.jrxml`:** tablas con bordes, duración en `m:ss`, y manejo de banda sin álbumes.
+- **Vistas:** botón "Descargar PDF" visible para cualquier usuario con sesión.

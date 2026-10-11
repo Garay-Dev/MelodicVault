@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import net.sf.jasperreports.engine.JRException;
+import pe.cibertec.melodicvault.interfacesService.IBandaService;
 import pe.cibertec.melodicvault.service.ReporteService;
 
 @Controller
@@ -17,6 +18,7 @@ import pe.cibertec.melodicvault.service.ReporteService;
 public class ReporteController {
 
     @Autowired private ReporteService reporteService;
+    @Autowired private IBandaService bandaService;
 
     @GetMapping("/album/{id}")
     public ResponseEntity<byte[]> reporteAlbum(@PathVariable int id) throws JRException {
@@ -26,4 +28,14 @@ public class ReporteController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
     }
+    
+    @GetMapping("/banda/{id}")
+    public ResponseEntity<byte[]> reporteBanda(@PathVariable int id) throws JRException {
+        byte[] pdf = reporteService.exportarAlbumesBanda(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=albumes_banda_" + id + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+    
 }
