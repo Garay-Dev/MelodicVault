@@ -66,7 +66,7 @@ public class ReporteService {
     }
 
     public byte[] exportarAlbumesBanda(int idBanda) throws JRException {
-        Banda banda = bandaService.listarId(idBanda)
+    	Banda banda = bandaService.listarConAlbumes(idBanda)
                 .orElseThrow(() -> new IllegalArgumentException("La banda no existe"));
 
         List<Album> albumes = banda.getAlbumes();

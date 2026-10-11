@@ -636,3 +636,132 @@ En `detalle-album.html` y `detalle-banda.html`:
 - **SecurityConfig:** sin cambios; las rutas exigen sesión y sirven a ADMIN y LECTOR.
 - **`reporte_canciones.jrxml` y `reporte_albumes.jrxml`:** tablas con bordes, duración en `m:ss`, y manejo de banda sin álbumes.
 - **Vistas:** botón "Descargar PDF" visible para cualquier usuario con sesión.
+
+
+# Cambios realizados v5
+
+ los reportes PDF funcionan igual para el usuario, pero ahora son más rápidos y no dependen de una configuración implícita de Spring Boot.
+
+---
+
+## 1. Compilación de los reportes una sola vez
+
+**Qué se cambió**
+
+En `ReporteService` se guardan los reportes compilados en campos y se cargan al iniciar la aplicación:
+
+```java
+private JasperReport reporteCanciones;
+private JasperReport reporteAlbumes;
+
+@PostConstruct
+public void compilarReportes() {
+    reporteCanciones = compilar("/reportes/reporte_canciones.jrxml");
+    reporteAlbumes   = compilar("/reportes/reporte_albumes.jrxml");
+}
+
+private JasperReport compilar(String ruta) {
+    try (InputStream in = getClass().getResourceAsStream(ruta)) {
+        if (in == null) {
+            throw new IllegalStateException("No se encontró la plantilla: " + ruta);
+        }
+        return JasperCompileManager.compileReport(in);
+    } catch (JRException | IOException e) {
+        throw new IllegalStateException("No se pudo compilar " + ruta, e);
+    }
+}
+```
+
+Los métodos `exportarCancionesAlbum` y `exportarAlbumesBanda` ahora usan los campos ya compilados en lugar de compilar el `.jrxml` en cada llamada.
+
+**Por qué**
+
+- Antes, cada clic en "Descargar PDF" compilaba el `.jrxml` desde cero, que es la parte más lenta del proceso.
+- El `JasperReport` compilado es de solo lectura, así que varios usuarios pueden usarlo a la vez sin riesgo.
+- Se usa `try-with-resources` para cerrar el `InputStream`; antes quedaba abierto en cada petición.
+- Es `jakarta.annotation.PostConstruct`, no `javax`: con Spring Boot 3 la de `javax` no existe.
+
+**Efectos a tener en cuenta**
+
+- Si un `.jrxml` tiene un error, la aplicación **no arranca** y el error aparece de inmediato en la consola, en lugar de descubrirse con un error 500 al hacer clic.
+- Si se edita un `.jrxml`, hay que **reiniciar la aplicación** para que el cambio se aplique.
+
+---
+
+## 2. Carga de álbumes de la banda con `@EntityGraph`
+
+**Qué se cambió**
+
+Se expuso en la capa de servicio el método que `IBanda` ya tenía:
+
+```java
+// IBanda (ya existía)
+@EntityGraph(attributePaths = "albumes")
+Optional<Banda> findWithAlbumesByIdBanda(Integer idBanda);
+```
+
+```java
+// IBandaService
+Optional<Banda> listarConAlbumes(int id);
+
+// BandaService
+@Override
+public Optional<Banda> listarConAlbumes(int id) {
+    return data.findWithAlbumesByIdBanda(id);
+}
+```
+
+Y en `ReporteService.exportarAlbumesBanda` se cambió solo la búsqueda:
+
+```java
+// antes
+Banda banda = bandaService.listarId(idBanda)
+
+// ahora
+Banda banda = bandaService.listarConAlbumes(idBanda)
+```
+
+**Por qué**
+
+- `Banda.albumes` es una relación `LAZY`. Antes el reporte funcionaba solo porque Spring Boot mantiene `open-in-view` activo por defecto; si alguien lo desactivaba, el reporte fallaba con `LazyInitializationException`.
+- Con `@EntityGraph`, la banda y sus álbumes se traen en **una sola consulta**, así que el reporte ya no depende de esa configuración.
+- No hace falta `@Transactional`: la colección llega cargada desde la consulta.
+- `listarId` se mantiene sin cambios porque `BandaController` lo usa en el detalle de banda.
+
+---
+
+## 3. Qué no cambió
+
+- Las rutas `/reportes/album/{id}` y `/reportes/banda/{id}`.
+- `SecurityConfig`: siguen exigiendo sesión y sirven a Administrador y Lector.
+- Los archivos `.jrxml` y las vistas con el botón "Descargar PDF".
+
+---
+
+## Pruebas realizadas
+
+| Prueba | Resultado esperado |
+|---|---|
+| Arrancar la aplicación | Sin errores en consola; los dos reportes se compilan al inicio |
+| `/reportes/album/1` | PDF con las canciones del álbum, ordenadas por pista |
+| `/reportes/banda/1` | PDF con los álbumes de la banda |
+| Banda sin álbumes | PDF con título y cabecera, sin error |
+| Detalle de banda en la web | Sigue funcionando con `listarId` |
+
+---
+
+## Limitaciones restantes
+
+- Los reportes se exportan solo a PDF.
+- Un cambio en un `.jrxml` requiere reiniciar la aplicación.
+
+---
+
+## Resumen
+
+- **ReporteService:** compila los `.jrxml` una vez con `@PostConstruct` y cierra el `InputStream`.
+- **IBandaService / BandaService:** nuevo `listarConAlbumes(id)` apoyado en el `@EntityGraph` existente.
+- **ReporteService.exportarAlbumesBanda:** usa `listarConAlbumes` y deja de depender de `open-in-view`.
+- **Las dos limitaciones de la v4 quedan resueltas.**
+
+
