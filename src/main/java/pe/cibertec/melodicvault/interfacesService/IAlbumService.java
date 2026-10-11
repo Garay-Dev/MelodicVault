@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import pe.cibertec.melodicvault.modelo.Album;
+import pe.cibertec.melodicvault.modelo.Cancion;
 
 public interface IAlbumService {
 
@@ -19,4 +20,5 @@ public interface IAlbumService {
     
     List<Object[]> estadisticas();
     
+    List<Cancion> listadoDeCanciones(int id);
 }

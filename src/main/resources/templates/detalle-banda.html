@@ -90,6 +90,12 @@
 		        <a th:href="@{/bandas}" class="btn-secundario">
 		            Volver al catálogo
 		        </a>
+				<a sec:authorize="isAuthenticated()"
+				   th:href="@{/reportes/banda/{id}(id=${banda.idBanda})}"
+				   target="_blank" class="btn-secundario">
+				    Descargar PDF
+				</a>
+				
 		    </div>
 		</section>
 

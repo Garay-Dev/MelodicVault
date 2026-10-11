@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="reporte_albumes" pageWidth="595" pageHeight="842"
+              columnWidth="515" leftMargin="40" rightMargin="40" topMargin="40" bottomMargin="40"
+              whenNoDataType="AllSectionsNoDetail">
+
+    <style name="celda">
+        <box leftPadding="6" rightPadding="6">
+            <pen lineWidth="0.5" lineColor="#000000"/>
+        </box>
+    </style>
+
+    <parameter name="bandaNombre" class="java.lang.String"/>
+    <parameter name="pais" class="java.lang.String"/>
+    <parameter name="genero" class="java.lang.String"/>
+    <parameter name="anioFormacion" class="java.lang.Integer"/>
+
+    <field name="anio" class="java.lang.Integer"/>
+    <field name="titulo" class="java.lang.String"/>
+    <field name="tipo" class="java.lang.String"/>
+    <field name="rating" class="java.lang.Number"/>
+
+    <title>
+        <band height="70">
+            <textField>
+                <reportElement x="0" y="0" width="515" height="30"/>
+                <textElement><font size="18" isBold="true"/></textElement>
+                <textFieldExpression><![CDATA[$P{bandaNombre}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="32" width="515" height="20"/>
+                <textElement><font size="12"/></textElement>
+                <textFieldExpression><![CDATA[$P{pais} + " · " + $P{genero} + " · Formada en " + $P{anioFormacion}]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <columnHeader>
+        <band height="25">
+            <staticText>
+                <reportElement style="celda" x="0" y="0" width="60" height="25" backcolor="#E0E0E0" mode="Opaque"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                <text><![CDATA[Año]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="celda" x="60" y="0" width="235" height="25" backcolor="#E0E0E0" mode="Opaque"/>
+                <textElement verticalAlignment="Middle"><font isBold="true"/></textElement>
+                <text><![CDATA[Título]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="celda" x="295" y="0" width="120" height="25" backcolor="#E0E0E0" mode="Opaque"/>
+                <textElement verticalAlignment="Middle"><font isBold="true"/></textElement>
+                <text><![CDATA[Tipo]]></text>
+            </staticText>
+            <staticText>
+                <reportElement style="celda" x="415" y="0" width="100" height="25" backcolor="#E0E0E0" mode="Opaque"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                <text><![CDATA[Rating]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <detail>
+        <band height="22">
+            <textField>
+                <reportElement style="celda" x="0" y="0" width="60" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{anio}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="celda" x="60" y="0" width="235" height="22"/>
+                <textElement verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{titulo}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="celda" x="295" y="0" width="120" height="22"/>
+                <textElement verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{tipo}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement style="celda" x="415" y="0" width="100" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle"/>
+                <textFieldExpression><![CDATA[$F{rating} == null ? "-" : String.format("%.1f", $F{rating})]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+
+    <pageFooter>
+        <band height="25">
+            <textField>
+                <reportElement x="0" y="5" width="515" height="20"/>
+                <textElement textAlignment="Right"><font size="9"/></textElement>
+                <textFieldExpression><![CDATA["Melodic Vault - Página " + $V{PAGE_NUMBER}]]></textFieldExpression>
+            </textField>
+        </band>
+    </pageFooter>
+</jasperReport>
