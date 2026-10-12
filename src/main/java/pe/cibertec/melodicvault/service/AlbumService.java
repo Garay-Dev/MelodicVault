@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import pe.cibertec.melodicvault.interfaces.IAlbum;
 import pe.cibertec.melodicvault.interfacesService.IAlbumService;
 import pe.cibertec.melodicvault.modelo.Album;
+import pe.cibertec.melodicvault.modelo.Cancion;
 
 @Service
 public class AlbumService implements IAlbumService {
@@ -28,6 +29,7 @@ public class AlbumService implements IAlbumService {
 
     @Override
     public int save(Album a) {
+    	
         int res = 0;
         Album album = data.save(a);
 
@@ -49,4 +51,15 @@ public class AlbumService implements IAlbumService {
                 texto, texto, texto
         );
     }
+    
+    @Override
+    public List<Object[]> estadisticas() {
+        return data.estadisticasPorBanda();
+    }
+
+    @Override
+    public List<Cancion> listadoDeCanciones(int id) {
+        return data.listadoDeCanciones(id);
+    }
+    
 }

@@ -1,5 +1,7 @@
 package pe.cibertec.melodicvault.modelo;
 
+import java.util.List;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 
@@ -40,6 +42,16 @@ public class Album {
     public Integer getIdAlbum() {
         return idAlbum;
     }
+    
+    
+    @OneToMany(mappedBy = "album", cascade = CascadeType.REMOVE)
+    @OrderBy("numeroPista ASC")
+    private List<Cancion> canciones;
+
+    public List<Cancion> getCanciones() { return canciones; }
+    public void setCanciones(List<Cancion> canciones) { this.canciones = canciones; }
+    
+    
 
     public void setIdAlbum(Integer idAlbum) {
         this.idAlbum = idAlbum;

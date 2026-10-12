@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import pe.cibertec.melodicvault.modelo.Album;
+import pe.cibertec.melodicvault.modelo.Cancion;
 
 public interface IAlbumService {
 
@@ -16,4 +17,8 @@ public interface IAlbumService {
     void delete(int id);
     
     List<Album> buscar(String texto);
+    
+    List<Object[]> estadisticas();
+    
+    List<Cancion> listadoDeCanciones(int id);
 }

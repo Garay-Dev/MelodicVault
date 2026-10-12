@@ -30,6 +30,7 @@ public class HomeController {
 
         model.addAttribute("totalBandas", bandas.size());
         model.addAttribute("totalAlbumes", albumes.size());
+        model.addAttribute("estadisticas", albumService.estadisticas());
 
         model.addAttribute("totalPaises",
                 bandas.stream()

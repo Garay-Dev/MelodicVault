@@ -16,4 +16,7 @@ public interface IBandaService {
     void delete(int id);
     
     List<Banda> buscar(String texto);
+    
+    Optional<Banda> listarConAlbumes(int id);
+    
 }

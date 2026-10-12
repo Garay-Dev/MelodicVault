@@ -49,4 +49,9 @@ public class BandaService implements IBandaService {
                 texto, texto, texto
         );
     }
+    
+    @Override
+    public Optional<Banda> listarConAlbumes(int id) {
+        return data.findWithAlbumesByIdBanda(id);
+    }
 }

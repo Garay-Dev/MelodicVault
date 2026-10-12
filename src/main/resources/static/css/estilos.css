@@ -54,6 +54,35 @@ body {
     font-weight: 600;
 }
 
+.form-salir {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+}
+
+.form-salir button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 24px;
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.form-salir button:hover,
+.form-salir button:focus-visible {
+    color: var(--dorado);
+}
+
+@media (max-width: 800px) {
+    .form-salir button {
+        margin: 0 8px;
+    }
+}
+
+
 .menu a:hover {
     color: var(--dorado);
 }
@@ -1335,5 +1364,267 @@ footer {
 @media (max-width: 800px) {
     .banda-lista-img {
         width: 100%;
+    }
+}
+
+.form-salir { display: inline; margin: 0; }
+.form-salir button {
+    background: none; border: none; padding: 0;
+    color: inherit; font: inherit; cursor: pointer;
+}
+
+
+/*canciones*/
+.alerta {
+    padding: 13px 20px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+.alerta-ok {
+    background: #e6f2e8;
+    color: #2f6b3f;
+    border: 1px solid #b9d9c0;
+}
+
+.alerta-error {
+    background: #fbe8ec;
+    color: #b23a48;
+    border: 1px solid #efc0c9;
+}
+
+.tabla-wrap {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid #e2d8c6;
+    box-shadow: 0 12px 28px rgba(0,0,0,.10);
+    overflow-x: auto;
+}
+
+.tabla-canciones {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.tabla-canciones th {
+    background: var(--crema);
+    color: var(--vino);
+    text-align: left;
+    padding: 16px 20px;
+    border-bottom: 3px solid var(--dorado);
+}
+
+.tabla-canciones td {
+    padding: 15px 20px;
+    border-bottom: 1px solid #efe6d4;
+}
+
+.tabla-canciones tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.tabla-canciones tbody tr:hover {
+    background: #fbf6ea;
+}
+
+.tabla-canciones .pista {
+    width: 70px;
+    color: var(--gris);
+    font-weight: bold;
+}
+
+.tabla-canciones .titulo {
+    font-weight: 800;
+}
+
+.tabla-canciones .dur {
+    font-variant-numeric: tabular-nums;
+}
+
+.enlace-album {
+    color: var(--grafito);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--dorado);
+}
+
+.enlace-album:hover {
+    color: var(--vino);
+}
+
+.acciones-tabla {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.acciones-tabla a {
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.vacio h2 {
+    margin: 0 0 8px;
+}
+
+/*form-cancion*/
+.formulario-vault .form-label {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.formulario-vault .input-vault {
+    display: block;
+    width: 100%;
+    font: inherit;
+    color: var(--grafito);
+}
+
+.formulario-vault .input-vault:focus {
+    outline: none;
+}
+
+.formulario-vault .input-vault.invalido {
+    border-color: #b23a48;
+}
+
+.campo-form {
+    margin-bottom: 20px;
+}
+
+.fila-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.error-campo {
+    color: #b23a48;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.ayuda-form {
+    color: var(--gris);
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.aviso-form {
+    background: #f7efe0;
+    border: 1px dashed var(--dorado);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin-bottom: 22px;
+}
+
+.aviso-form a {
+    color: var(--vino);
+    font-weight: bold;
+}
+
+@media (max-width: 700px) {
+    .fila-form {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ===== formulario álbum: pulido ===== */
+.formulario-vault textarea.input-vault {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.formulario-vault .form-select.input-vault {
+    padding-right: 2.5rem;
+    cursor: pointer;
+}
+
+.formulario-vault .form-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.formulario-vault .text-danger {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #b23a48 !important;
+}
+
+.formulario-vault .input-vault::placeholder {
+    color: #b5aa96;
+}
+
+/* vista previa con portada real */
+.preview-cover {
+    flex-shrink: 0;
+    transition: transform .2s;
+}
+
+.preview-cover.con-imagen {
+    background-size: cover;
+    background-position: center;
+    border: 3px solid var(--dorado);
+    box-shadow: 6px 6px 0 #111;
+}
+
+.preview-cover.con-imagen i {
+    display: none;
+}
+
+.preview-album-form h3 {
+    word-break: break-word;
+}
+
+/* ===== álbum completo: filas de canciones ===== */
+.seccion-canciones {
+    margin-top: 40px;
+}
+
+.fila-cancion {
+    display: grid;
+    grid-template-columns: 38px 100px 1fr 170px;
+    gap: 12px;
+    align-items: center;
+    background: #fbf6ea;
+    border: 1px solid #efe6d4;
+    border-radius: 16px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    transition: border-color .15s;
+}
+
+.fila-cancion:focus-within {
+    border-color: var(--dorado);
+}
+
+.num-fila {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--grafito);
+    color: var(--dorado);
+    font-weight: 800;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 700px) {
+    .fila-cancion {
+        grid-template-columns: 1fr;
+    }
+    .num-fila {
+        margin-bottom: 2px;
     }
 }

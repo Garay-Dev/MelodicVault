@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canciones · MelodicVault</title>
+<!-- Ajusta la ruta si tu estilo.css está en otra carpeta de static/ -->
+<link rel="stylesheet" th:href="@{/css/estilos.css}">
+</head>
+<body>
+
+<header class="cabecera-interna">
+  <nav class="navbar">
+    <div class="logo">MELODIC<span>VAULT</span></div>
+    <div class="menu">
+      <a th:href="@{/}">Inicio</a>
+      <a th:href="@{/bandas}">Bandas</a>
+      <a th:href="@{/albumes}">Álbumes</a>
+      <a th:href="@{/canciones}">Canciones</a>
+	  <a th:href="@{/acerca}">Acerca de</a>
+	  <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+	  <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="form-salir">
+	      <button type="submit">Salir (<span sec:authentication="name">usuario</span>)</button>
+	  </form>
+    </div>
+  </nav>
+</header>
+
+<main class="contenedor">
+
+  <div class="titulo-pagina">
+    <h1>Canciones</h1>
+    <p><span th:text="${total}">0</span> canciones en el catálogo</p>
+  </div>
+
+  <div class="acciones-superiores" sec:authorize="hasRole('ADMIN')">
+    <a class="btn-principal" th:href="@{/canciones/nuevo}">Nueva canción</a>
+  </div>
+
+  <div class="alerta alerta-ok"  role="status" th:if="${mensaje}" th:text="${mensaje}"></div>
+  <div class="alerta alerta-error" role="alert" th:if="${error}"   th:text="${error}"></div>
+
+  <section class="tabla-wrap" th:unless="${canciones.isEmpty()}">
+    <table class="tabla-canciones">
+      <thead>
+        <tr>
+          <th>Pista</th>
+          <th>Título</th>
+          <th>Álbum</th>
+          <th>Banda</th>
+          <th>Duración</th>
+          <th sec:authorize="hasRole('ADMIN')">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="c : ${canciones}">
+          <td class="pista" th:text="${c.numeroPista}">1</td>
+          <td class="titulo" th:text="${c.titulo}">Título</td>
+          <td>
+            <a class="enlace-album"
+               th:href="@{/albumes/detalle/{id}(id=${c.album.idAlbum})}"
+               th:text="${c.album.titulo}">Álbum</a>
+          </td>
+          <td class="pais" th:text="${c.album.banda.nombre}">Banda</td>
+          <td class="dur"
+              th:text="${c.duracionSegundos != null} ? ${'' + (c.duracionSegundos / 60) + ':' + #numbers.formatInteger(c.duracionSegundos % 60, 2)} : '—'">4:05</td>
+          <td sec:authorize="hasRole('ADMIN')">
+            <div class="acciones-tabla">
+              <a class="btn-editar" th:href="@{/canciones/editar/{id}(id=${c.idCancion})}">Editar</a>
+              <a class="btn-eliminar" th:href="@{/canciones/eliminar/{id}(id=${c.idCancion})}"
+                 onclick="return confirm('¿Eliminar esta canción?')">Eliminar</a>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="vacio" th:if="${canciones.isEmpty()}">
+    <div class="ancla">♪</div>
+    <h2>Aún no hay canciones</h2>
+    <p sec:authorize="hasRole('ADMIN')">Registra la primera con el botón “Nueva canción”.</p>
+  </section>
+
+</main>
+
+<footer>
+  <p>MelodicVault · Catálogo musical</p>
+</footer>
+
+</body>
+</html>

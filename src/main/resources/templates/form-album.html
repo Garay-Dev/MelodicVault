@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<html lang="es" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>Registrar Álbum · Melodic Vault</title>
@@ -17,7 +17,13 @@
 		    <a th:href="@{/}">Inicio</a>
 		    <a th:href="@{/bandas}">Bandas</a>
 		    <a th:href="@{/albumes}">Álbumes</a>
+		    <a th:href="@{/canciones}">Canciones</a>
 		    <a th:href="@{/acerca}">Acerca de</a>
+
+		    <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+		    <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="form-salir">
+		        <button type="submit">Salir (<span sec:authentication="name">usuario</span>)</button>
+		    </form>
 		</div>
     </nav>
 </header>
@@ -155,6 +161,15 @@
     </section>
 
 </main>
+
+<footer>
+    <p>Melodic Vault - 2026</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
 
 <footer>
     <p>Melodic Vault - 2026</p>
