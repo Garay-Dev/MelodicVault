@@ -115,7 +115,7 @@
 	                <a th:href="@{/bandas/editar/{id}(id=${b.idBanda})}" class="btn-editar">
 	                    Editar
 	                </a>
-
+					<!-- bandas.html: el navegador pide confirmación antes de enviar la petición -->
 	                <a th:href="@{/bandas/eliminar/{id}(id=${b.idBanda})}"
 	                   class="btn-eliminar"
 	                   onclick="return confirm('¿Seguro que deseas eliminar esta banda? También se eliminarán sus álbumes asociados.');">

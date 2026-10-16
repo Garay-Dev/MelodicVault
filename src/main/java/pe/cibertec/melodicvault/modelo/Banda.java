@@ -39,6 +39,9 @@ public class Banda {
 
     @OneToMany(mappedBy = "banda", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Album> albumes;
+    
+    
+    //getters y setters
 
     public Integer getIdBanda() {
         return idBanda;
