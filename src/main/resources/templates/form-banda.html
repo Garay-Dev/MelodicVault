@@ -53,6 +53,7 @@
             </div>
 
 			<form th:action="@{/bandas/guardar}" th:object="${banda}" method="post">
+		<!-- form-banda.html: sin este campo, guardar insertaría una banda nueva en vez de actualizar -->
 				<input type="hidden" th:field="*{idBanda}">
 
                 <div class="row g-4">

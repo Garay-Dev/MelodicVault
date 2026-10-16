@@ -32,7 +32,7 @@
 
     <section class="titulo-pagina">
         <p class="tag"><i class="bi bi-disc"></i> Nueva discografía</p>
-        <h1>Registrar álbum</h1>
+          <h1 th:text="${modo == 'editar'} ? 'Editar álbum' : 'Registrar álbum'">Registrar álbum</h1>
         <p>Agrega un disco, EP, live album o compilación al catálogo.</p>
     </section>
 
@@ -64,7 +64,7 @@
 
                     <div class="col-md-6">
                         <label class="form-label">Banda</label>
-						<!--Mensaje de error-->
+						<!-- form-album.html: la banda se eligió de una lista leída de la base de datos -->
 						<select class="form-select input-vault" th:field="*{banda}">
 						    <option value="">Seleccionar banda</option>
 						    <option th:each="b : ${bandas}"

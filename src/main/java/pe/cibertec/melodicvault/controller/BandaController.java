@@ -1,5 +1,6 @@
 package pe.cibertec.melodicvault.controller;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,14 +25,17 @@ public class BandaController {
     @GetMapping({"", "/"})
     public String listar(@RequestParam(value = "buscar", required = false) String buscar, Model model) {
 
+        List<Banda> lista;
+
         if (buscar != null && !buscar.trim().isEmpty()) {
-            model.addAttribute("bandas", service.buscar(buscar));
-            model.addAttribute("total", service.buscar(buscar).size());
+            lista = service.buscar(buscar);
             model.addAttribute("buscar", buscar);
         } else {
-            model.addAttribute("bandas", service.listar());
-            model.addAttribute("total", service.listar().size());
+            lista = service.listar();
         }
+
+        model.addAttribute("bandas", lista);
+        model.addAttribute("total", lista.size());
 
         return "bandas";
     }
