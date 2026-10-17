@@ -13,18 +13,20 @@
 <header class="cabecera-interna">
     <nav class="navbar">
         <div class="logo">MELODIC <span>VAULT</span></div>
-		<div class="menu">
-		    <a th:href="@{/}">Inicio</a>
-		    <a th:href="@{/bandas}">Bandas</a>
-		    <a th:href="@{/albumes}">Álbumes</a>
-		    <a th:href="@{/canciones}">Canciones</a>
-		    <a th:href="@{/acerca}">Acerca de</a>
 
-		    <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
-		    <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="form-salir">
-		        <button type="submit">Salir (<span sec:authentication="name">usuario</span>)</button>
-		    </form>
-		</div>
+        <div class="menu">
+            <a th:href="@{/}">Inicio</a>
+            <a th:href="@{/bandas}">Bandas</a>
+            <a th:href="@{/albumes}">Álbumes</a>
+            <a th:href="@{/canciones}">Canciones</a>
+            <a th:href="@{/acerca}">Acerca de</a>
+
+            <a sec:authorize="!isAuthenticated()" th:href="@{/login}">Iniciar sesión</a>
+            <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="form-salir">
+                <button type="submit">Salir (<span sec:authentication="name">usuario</span>)</button>
+            </form>
+        </div>
+
     </nav>
 </header>
 
@@ -81,5 +83,9 @@
     <p>Melodic Vault - 2026</p>
 </footer>
 
+<<<<<<< HEAD
 </body>
 </html>
+=======
+</body>
+>>>>>>> c97beaa784c4551a5a9e55caa8072ba2cd7f1afa
