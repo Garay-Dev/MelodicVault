@@ -48,7 +48,7 @@
         </p>
     </section>
 
-	<div class="vacio" th:if="${bandas.isEmpty()}">
+	<div class="vacio" th:if="${bandas.isEmpty() && buscar != null && !buscar.isBlank()}">
 	    <div class="ancla"><i class="bi bi-search"></i></div>
 	    <p>No se encontraron bandas con ese criterio.</p>
 	</div>
@@ -72,7 +72,7 @@
 
 	<section class="grid-catalogo">
 
-	    <div class="vacio" th:if="${bandas.isEmpty()}">
+	    <div class="vacio" th:if="${bandas.isEmpty() && (buscar == null || buscar.isBlank())}">
 	        <div class="ancla"><i class="bi bi-vinyl"></i></div>
 	        <p>Aún no hay bandas registradas.</p>
 	        <a  sec:authorize="hasRole('ADMIN')" th:href="@{/bandas/nuevo}" class="btn-principal">

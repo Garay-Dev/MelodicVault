@@ -5,13 +5,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import net.sf.jasperreports.engine.JRException;
 import pe.cibertec.melodicvault.interfacesService.IBandaService;
 import pe.cibertec.melodicvault.service.ReporteService;
+import org.springframework.http.HttpStatus;
 
 @Controller
 @RequestMapping("/reportes")
@@ -36,6 +40,13 @@ public class ReporteController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=albumes_banda_" + id + ".pdf")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
+    }
+    
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public String noExiste(Model model) {
+        model.addAttribute("status", 404);
+        return "error";
     }
     
 }

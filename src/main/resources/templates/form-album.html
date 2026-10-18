@@ -31,7 +31,7 @@
 <main class="contenedor">
 
     <section class="titulo-pagina">
-        <p class="tag"><i class="bi bi-disc"></i> Nueva discografía</p>
+        <span th:text="${modo == 'editar'} ? 'Editar discografía' : 'Nueva discografía'">Nueva discografía</span>
           <h1 th:text="${modo == 'editar'} ? 'Editar álbum' : 'Registrar álbum'">Registrar álbum</h1>
         <p>Agrega un disco, EP, live album o compilación al catálogo.</p>
     </section>

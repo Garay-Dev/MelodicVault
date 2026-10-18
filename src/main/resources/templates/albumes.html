@@ -43,7 +43,7 @@
     </section>
 
 	
-	<div class="vacio" th:if="${albumes.isEmpty()}">
+	<div class="vacio" th:if="${albumes.isEmpty() && buscar != null && !buscar.isBlank()}">
 	    <div class="ancla"><i class="bi bi-search"></i></div>
 	    <p>No se encontraron álbumes con ese criterio.</p>
 	</div>
@@ -107,7 +107,7 @@
 		        </p>
 
 		        <div class="datos-album">
-		            <span>⭐ <span th:text="${a.rating}">9.0</span></span>
+		            <span>⭐ <span th:text="${a.rating != null} ? ${a.rating} : '—'">9.0</span></span>
 		            <span>💿 <span th:text="${a.formato}">CD</span></span>
 		            <span>🎸 <span th:text="${a.banda.genero}">Género</span></span>
 		        </div>

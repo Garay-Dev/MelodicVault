@@ -19,7 +19,13 @@ public class AlbumTransaccionalService {
     @Transactional
     public void registrarAlbumConCanciones(Album album, List<Cancion> canciones) {
         Album guardado = albumRepo.save(album);
+        
         for (Cancion c : canciones) {
+        	if (c.getDuracionSegundos() == null || c.getDuracionSegundos() < 0)
+        	    throw new IllegalArgumentException("Falta la duración (o es negativa) en: " + c.getTitulo());
+        	if (c.getTitulo().length() > 100)
+        	    throw new IllegalArgumentException("Hay un título de más de 100 caracteres");
+        	
             if (c.getNumeroPista() == null || c.getNumeroPista() <= 0)
                 throw new IllegalArgumentException("Pista inválida: " + c.getTitulo());
             c.setAlbum(guardado);

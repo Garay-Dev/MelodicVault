@@ -103,14 +103,16 @@
 
                     <div class="col-md-12">
                         <label class="form-label">URL de imagen</label>
-						<input type="text" class="form-control input-vault" th:field="*{imagenUrl}" placeholder="https://imagen-de-la-banda.com/foto.jpg">
+						<input type="text" class="form-control input-th:field="*{imagenUrl}" maxlength="255" placeholder="https://imagen-de-la-banda.com/foto.jpg">
+						<span class="text-danger" th:if="${#fields.hasErrors('imagenUrl')}" th:errors="*{imagenUrl}"></span>
                     </div>
 
                     <div class="col-md-12">
                         <label class="form-label">Descripción</label>
 						<textarea class="form-control input-vault" rows="5"
-						          th:field="*{descripcion}"
+						          th:field="*{descripcion}" maxlength="500"
 						          placeholder="Breve reseña de la banda, sonido, época o importancia dentro del género..."></textarea>
+						<span class="text-danger" th:if="${#fields.hasErrors('descripcion')}" th:errors="*{descripcion}"></span>
                     </div>
 
                 </div>
