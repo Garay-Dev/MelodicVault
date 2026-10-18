@@ -764,4 +764,284 @@ Banda banda = bandaService.listarConAlbumes(idBanda)
 - **ReporteService.exportarAlbumesBanda:** usa `listarConAlbumes` y deja de depender de `open-in-view`.
 - **Las dos limitaciones de la v4 quedan resueltas.**
 
+---
 
+# Cambios realizados v6
+
+La aplicación funciona igual para el usuario en lo esencial, pero ahora valida mejor los datos, responde con páginas de error comprensibles y evita mostrar avisos contradictorios o campos vacíos.
+
+---
+
+## 1. Entidad `Cancion`: restricción única y duración obligatoria
+
+**Qué se cambió**
+
+Se quitó `uniqueConstraints` de `@Table`. Ahora queda:
+
+```java
+@Entity
+@Table(name = "cancion")
+public class Cancion {
+    // atributos
+}
+```
+
+Y el campo `duracionSegundos` pasa a ser obligatorio:
+
+```java
+// antes
+@Min(0)
+private Integer duracionSegundos;
+
+// ahora
+@NotNull(message = "La duración es obligatoria")
+@Min(value = 0, message = "La duración no puede ser negativa")
+private Integer duracionSegundos;
+```
+
+**Por qué**
+
+- La restricción `UNIQUE (id_album, numero_pista)` ya la define la base de datos; declararla también en la entidad duplicaba la regla.
+- Se actualizó la base de datos para que sea la única fuente de esa restricción.
+- `@Min` por sí solo acepta `null`, así que una canción podía guardarse sin duración. Con `@NotNull` el valor vacío ya no pasa.
+
+---
+
+## 2. Entidad `Album`: cascada sin `orphanRemoval`
+
+**Qué se cambió**
+
+```java
+@OneToMany(mappedBy = "album", cascade = CascadeType.REMOVE)
+```
+
+Sin `orphanRemoval`. Este cambio es una corrección anterior a v6 que no se había registrado.
+
+**Por qué**
+
+- El formulario de edición no envía las canciones del álbum; con `orphanRemoval` activo, guardar un álbum las trataría como huérfanas y las borraría.
+- Sin `orphanRemoval`, guardar un álbum no puede borrar sus canciones.
+- Eliminar el álbum sigue eliminando sus canciones gracias a `CascadeType.REMOVE`.
+
+---
+
+## 3. Validación manual en `AlbumTransaccionalService`
+
+**Qué se cambió**
+
+Al registrar un álbum completo se validan las canciones una por una:
+
+```java
+if (c.getDuracionSegundos() == null || c.getDuracionSegundos() < 0)
+    throw new IllegalArgumentException("Falta la duración (o es negativa) en: " + c.getTitulo());
+if (c.getTitulo().length() > 100)
+    throw new IllegalArgumentException("Hay un título de más de 100 caracteres");
+```
+
+**Por qué**
+
+- En el registro completo las canciones no pasan por `@Valid`, porque el usuario puede dejar filas vacías (por ejemplo, un álbum con 5 canciones y 10 filas disponibles).
+- Sin esta validación, una duración vacía o un título demasiado largo llegaban a la base de datos.
+
+---
+
+## 4. `BandaController.eliminar` verifica que la banda exista
+
+**Qué se cambió**
+
+```java
+// antes
+@GetMapping("/eliminar/{id}")
+public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
+    service.delete(id);
+    flash.addFlashAttribute("mensaje", "Banda eliminada correctamente.");
+    return "redirect:/bandas";
+}
+
+// ahora
+@GetMapping("/eliminar/{id}")
+public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
+    if (service.listarId(id).isEmpty()) {
+        flash.addFlashAttribute("error", "La banda no existe.");
+        return "redirect:/bandas";
+    }
+    service.delete(id);
+    flash.addFlashAttribute("mensaje", "Banda eliminada correctamente.");
+    return "redirect:/bandas";
+}
+```
+
+**Por qué**
+
+- Antes, eliminar un id inexistente mostraba igualmente "Banda eliminada correctamente.", lo cual era falso.
+- Ahora el usuario ve "La banda no existe." cuando corresponde.
+
+---
+
+## 5. Manejo de errores: `ReporteController`, `SecurityConfig` y `error.html`
+
+**Qué se cambió**
+
+En `ReporteController` se agregó un manejador de excepciones:
+
+```java
+@ExceptionHandler(IllegalArgumentException.class)
+@ResponseStatus(HttpStatus.NOT_FOUND)
+public String noExiste(Model model) {
+    model.addAttribute("status", 404);
+    return "error";
+}
+```
+
+En `SecurityConfig` se agregó `/error` a las rutas públicas:
+
+```java
+.requestMatchers("/", "/acerca", "/bandas", "/albumes", "/canciones",
+                 "/*/detalle/**", "/registro", "/error").permitAll()
+```
+
+Y se creó la plantilla `error.html`:
+
+```html
+<main class="contenedor">
+  <section class="titulo-pagina">
+    <p class="tag"><i class="bi bi-exclamation-triangle"></i> Error <span th:text="${status}">500</span></p>
+    <h1 th:if="${status == 403}">No tienes permiso para esta acción</h1>
+    <h1 th:if="${status == 404}">No encontramos lo que buscas</h1>
+    <h1 th:if="${status != 403 && status != 404}">Ocurrió un problema</h1>
+    <p><a th:href="@{/}" class="btn-secundario">Volver al inicio</a></p>
+  </section>
+</main>
+```
+
+**Por qué**
+
+- `ReporteController` y `ReporteService` declaraban `throws IOException`, pero nadie atrapaba el error: se delegaba hacia arriba y terminaba como un error técnico sin tratar. Ahora `ReporteController` lo atrapa en lugar de delegarlo.
+- Un id de reporte inexistente produce un 404 con una vista comprensible.
+- `/error` debe ser pública; de lo contrario, un error en una página pública redirigiría al login en lugar de mostrar el mensaje.
+- `error.html` reemplaza el error por defecto: muestra el código y un mensaje distinto para 403, 404 y cualquier otro error, con un botón para volver al inicio.
+
+---
+
+## 6. Cambios en las vistas
+
+### 6.1 `bandas.html`: dos avisos de lista vacía con condiciones distintas
+
+Antes ambos avisos usaban `th:if="${bandas.isEmpty()}"` y se mostraban a la vez. Ahora cada uno tiene su condición:
+
+```html
+<!-- No hay resultados para la búsqueda -->
+<div class="vacio" th:if="${bandas.isEmpty() && buscar != null && !buscar.isBlank()}">
+    <div class="ancla"><i class="bi bi-search"></i></div>
+    <p>No se encontraron bandas con ese criterio.</p>
+</div>
+
+<!-- No hay bandas registradas -->
+<div class="vacio" th:if="${bandas.isEmpty() && (buscar == null || buscar.isBlank())}">
+    <div class="ancla"><i class="bi bi-vinyl"></i></div>
+    <p>Aún no hay bandas registradas.</p>
+    <a sec:authorize="hasRole('ADMIN')" th:href="@{/bandas/nuevo}" class="btn-principal">
+        <i class="bi bi-plus-circle"></i> Registrar primera banda
+    </a>
+</div>
+```
+
+### 6.2 `form-banda.html` y entidades: errores visibles y longitud máxima
+
+`descripcion` (máx. 500) e `imagenUrl` no tenían dónde mostrar el error: si se excedía el límite, el formulario volvía sin ningún aviso.
+
+```html
+<!-- URL de imagen -->
+<span class="text-danger" th:if="${#fields.hasErrors('imagenUrl')}" th:errors="*{imagenUrl}"></span>
+
+<!-- Descripción -->
+<textarea ... th:field="*{descripcion}" maxlength="500"></textarea>
+<span class="text-danger" th:if="${#fields.hasErrors('descripcion')}" th:errors="*{descripcion}"></span>
+```
+
+Como complemento, se limitó el tamaño de las URL en las entidades de banda y álbum:
+
+```java
+@Size(max = 255)
+private String portadaUrl;
+
+@Size(max = 255)
+private String imagenUrl;
+```
+
+### 6.3 `form-album.html`: título dinámico
+
+```html
+<!-- antes -->
+<p class="tag"><i class="bi bi-disc"></i> Nueva discografía</p>
+
+<!-- ahora -->
+<span th:text="${modo == 'editar'} ? 'Editar discografía' : 'Nueva discografía'">Nueva discografía</span>
+```
+
+Antes decía siempre "Nueva discografía", incluso al editar.
+
+### 6.4 Rating nulo en `detalle-album.html`, `detalle-banda.html` y `albumes.html`
+
+Un álbum sin rating dejaba el valor vacío. Ahora se muestra "—":
+
+```html
+<!-- detalle-album.html -->
+<span>Rating: <span th:text="${album.rating != null} ? ${album.rating} : '—'">9.0</span></span>
+
+<!-- detalle-banda.html -->
+<span class="rating">
+    Rating <span th:text="${a.rating != null} ? ${a.rating} : '—'">9.0</span>
+</span>
+
+<!-- albumes.html -->
+<span>⭐ <span th:text="${a.rating != null} ? ${a.rating} : '—'">9.0</span></span>
+```
+
+---
+
+## 7. Qué no cambió
+
+- Las rutas de reportes `/reportes/album/{id}` y `/reportes/banda/{id}`.
+- La compilación de reportes con `@PostConstruct` y la carga con `@EntityGraph` de la v5.
+- Los archivos `.jrxml`.
+- Los permisos del resto de rutas en `SecurityConfig`; solo se agregó `/error`.
+
+---
+
+## Pruebas realizadas
+
+| Prueba | Resultado esperado |
+|---|---|
+| Guardar una canción sin duración | Mensaje "La duración es obligatoria" |
+| Guardar una canción con duración negativa | Mensaje "La duración no puede ser negativa" |
+| Registro completo con una duración vacía o un título de más de 100 caracteres | Error de validación con el título de la canción afectada |
+| Editar un álbum y guardar | Las canciones del álbum se conservan |
+| Eliminar un álbum | Se eliminan también sus canciones |
+| `/bandas/eliminar/{id}` con un id inexistente | Mensaje "La banda no existe." |
+| Buscar una banda que no existe | Solo aparece "No se encontraron bandas con ese criterio." |
+| Lista de bandas vacía sin búsqueda | Solo aparece "Aún no hay bandas registradas." |
+| `/reportes/album/{id}` con un id inexistente | Página `error.html` con código 404 |
+| Error en una página pública sin sesión | Página `error.html`, sin redirigir al login |
+| Descripción de más de 500 caracteres o URL de más de 255 | El formulario muestra el mensaje de error bajo el campo |
+| Abrir el formulario de álbum en modo editar | La etiqueta dice "Editar discografía" |
+| Álbum sin rating | Se muestra "—" en el detalle de álbum, el detalle de banda y el listado de álbumes |
+
+---
+
+## Limitaciones restantes
+
+- La validación de duración y título en `AlbumTransaccionalService` es manual y repite las reglas de `Cancion`; si cambian las anotaciones de la entidad, hay que actualizar ambos lugares.
+- El manejador de `ReporteController` solo cubre `IllegalArgumentException`; cualquier otro error se muestra con `error.html` pero con el código que asigne Spring.
+
+---
+
+## Resumen
+
+- **Cancion:** se quita el `UNIQUE` duplicado de la entidad y `duracionSegundos` pasa a ser obligatorio.
+- **Album:** `cascade = CascadeType.REMOVE` sin `orphanRemoval`, para que editar no borre canciones.
+- **AlbumTransaccionalService:** valida duración y título de cada canción en el registro completo.
+- **BandaController.eliminar:** comprueba que la banda exista antes de eliminar.
+- **ReporteController / SecurityConfig / error.html:** los errores se atrapan y se muestran en una página comprensible, accesible sin sesión.
+- **Vistas:** avisos de lista vacía separados, errores visibles en `form-banda.html`, título dinámico en `form-album.html` y rating nulo mostrado como "—".
+- **Entidades de banda y álbum:** `@Size(max = 255)` en las URL de imagen y portada.

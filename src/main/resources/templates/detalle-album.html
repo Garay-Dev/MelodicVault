@@ -60,7 +60,7 @@
             </h3>
 
             <div class="datos-album detalle-datos">
-                <span>Rating: <span th:text="${album.rating}">9.0</span></span>
+                <span>Rating: <span th:text="${album.rating != null} ? ${album.rating} : '—'">9.0</span></span>
                 <span>Formato: <span th:text="${album.formato}">CD</span></span>
                 <span>Género: <span th:text="${album.banda.genero}">Hard Rock</span></span>
                 <span>País: <span th:text="${album.banda.pais}">País</span></span>

@@ -1,0 +1,9 @@
+<main class="contenedor">
+  <section class="titulo-pagina">
+    <p class="tag"><i class="bi bi-exclamation-triangle"></i> Error <span th:text="${status}">500</span></p>
+    <h1 th:if="${status == 403}">No tienes permiso para esta acción</h1>
+    <h1 th:if="${status == 404}">No encontramos lo que buscas</h1>
+    <h1 th:if="${status != 403 && status != 404}">Ocurrió un problema</h1>
+    <p><a th:href="@{/}" class="btn-secundario">Volver al inicio</a></p>
+  </section>
+</main>
