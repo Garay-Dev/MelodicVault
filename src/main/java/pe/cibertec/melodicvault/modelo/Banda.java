@@ -34,7 +34,8 @@ public class Banda {
 
     @Size(max = 500)
     private String descripcion;
-
+    
+    @Size(max = 255)
     private String imagenUrl;
 
     @OneToMany(mappedBy = "banda", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

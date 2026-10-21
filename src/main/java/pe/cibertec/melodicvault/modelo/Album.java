@@ -28,7 +28,8 @@ public class Album {
     private Double rating;
 
     private String formato;
-
+    
+    @Size(max = 255)
     private String portadaUrl;
 
     @Size(max = 500)

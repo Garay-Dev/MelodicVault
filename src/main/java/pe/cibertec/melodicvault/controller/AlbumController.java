@@ -67,7 +67,11 @@ public class AlbumController {
     @PostMapping("/guardar")
     public String guardar(@Valid Album album, BindingResult result, Model model, RedirectAttributes flash) {
 
-        if (result.hasErrors()) {
+    	if (album.getBanda() == null || album.getBanda().getIdBanda() == null) {
+    	    result.rejectValue("banda", "requerido", "Debe seleccionar una banda");
+    	}
+    	
+    	if (result.hasErrors()) {
             model.addAttribute("bandas", bandaService.listar());
             model.addAttribute("modo", album.getIdAlbum() == null ? "registrar" : "editar");
             return "form-album";

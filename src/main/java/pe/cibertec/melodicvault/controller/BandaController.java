@@ -81,6 +81,10 @@ public class BandaController {
 
     @GetMapping("/eliminar/{id}")
     public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
+        if (service.listarId(id).isEmpty()) {
+            flash.addFlashAttribute("error", "La banda no existe.");
+            return "redirect:/bandas";
+        }
         service.delete(id);
         flash.addFlashAttribute("mensaje", "Banda eliminada correctamente.");
         return "redirect:/bandas";
