@@ -147,19 +147,19 @@
                         </p>
                     </div>
                 </div>
+                <div class="form-botones">
+                    <a th:href="@{/albumes}" class="btn-cancelar">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </a>
 
+                    <button type="submit" class="btn-guardar">
+                        <i class="bi bi-save"></i>
+                        <span th:text="${modo == 'editar'} ? 'Guardar cambios' : 'Guardar álbum'">Guardar álbum</span>
+                    </button>
+                </div>
 
             </form>
-			<div class="form-botones">
-			    <a th:href="@{/albumes}" class="btn-cancelar">
-			        <i class="bi bi-x-circle"></i> Cancelar
-			    </a>
 
-			    <button type="submit" class="btn-guardar">
-			        <i class="bi bi-save"></i>
-			        <span th:text="${modo == 'editar'} ? 'Guardar cambios' : 'Guardar álbum'">Guardar álbum</span>
-			    </button>
-			</div>
 
     </section>
 
