@@ -91,6 +91,142 @@ Si el paso 5 falla con clases no encontradas (`ClassNotFoundException`, `NoClass
 - Creado `.gitignore` en la raíz del proyecto `(Maven target/, metadata de Eclipse/IntelliJ/VS Code, logs, zips)`.
 
 
+# Cambios realizados v2
+
+Este documento resume los cambios de lógica hechos en MelodicVault (entidad, base de datos y controllers) y la razón de cada uno. No incluye cambios de estilos ni de plantillas.
+
+---
+
+## 1. Restricción de pista única por álbum (entidad `Cancion`)
+
+**Qué se cambió**
+
+Se agregó una restricción única compuesta sobre `id_album` y `numero_pista` en la entidad:
+
+```java
+@Entity
+@Table(name = "cancion",
+       uniqueConstraints = { @UniqueConstraint(columnNames = {"id_album", "numero_pista"}) })
+public class Cancion { ... }
+```
+
+Requiere el import `jakarta.persistence.UniqueConstraint`.
+
+**Por qué**
+
+- Sin esta restricción se podían registrar dos canciones con el mismo número de pista dentro de un mismo álbum, lo que deja el listado del álbum incoherente.
+- La unicidad se definió **por álbum** y no sobre `numero_pista` a secas. Con `@Column(unique = true)` en ese campo, la pista 1 del álbum A habría bloqueado la pista 1 del álbum B, que es un caso totalmente válido.
+- Se escribió con llaves `{ @UniqueConstraint(...) }` y con el import correcto de `jakarta.persistence`, porque sin el import el compilador rechazaba la anotación.
+
+---
+
+## 2. Restricción incluida en el script SQL
+
+**Qué se cambió**
+
+Se modificó el script `bd_melodicvault` para que la restricción esté dentro del `CREATE TABLE cancion`, y se volvió a correr el script completo:
+
+```sql
+CREATE TABLE cancion (
+    id_cancion         INT AUTO_INCREMENT PRIMARY KEY,
+    titulo             VARCHAR(100) NOT NULL,
+    numero_pista       INT          NOT NULL,
+    duracion_segundos  INT,
+    id_album           INT          NOT NULL,
+    CONSTRAINT fk_cancion_album FOREIGN KEY (id_album) REFERENCES album(id_album)
+        ON DELETE CASCADE,
+    CONSTRAINT uq_cancion_album_pista UNIQUE (id_album, numero_pista)
+);
+```
+
+**Por qué**
+
+- La base de datos es la que garantiza de verdad la unicidad. La anotación de la entidad documenta la regla, pero con `ddl-auto=update` Hibernate no es fiable para crear o modificar restricciones sobre tablas que ya existen.
+- Al estar la restricción dentro del `CREATE TABLE`, quien ejecute el script desde cero obtiene la base completa, sin pasos manuales adicionales.
+- Los nombres de columna (`id_album`, `numero_pista`) coinciden con los de la entidad.
+- Los datos de prueba del script no violan la restricción: cada álbum tiene sus pistas sin repetir.
+
+---
+
+## 3. Validación y manejo de errores en `CancionController`
+
+**Qué se cambió**
+
+En `guardar` se agregaron dos cosas.
+
+Primero, una validación para que no se pueda guardar sin elegir álbum:
+
+```java
+if (cancion.getAlbum() == null || cancion.getAlbum().getIdAlbum() == null) {
+    result.rejectValue("album", "requerido", "Debe seleccionar un álbum");
+}
+```
+
+Segundo, el `service.save(cancion)` se envolvió en un `try/catch`:
+
+```java
+try {
+    service.save(cancion);
+} catch (DataAccessException e) {
+    result.rejectValue("numeroPista", "duplicado",
+            "No se pudo guardar. Revisa que la pista no esté repetida en este álbum.");
+    model.addAttribute("albumes", albumService.listar());
+    model.addAttribute("modo", cancion.getIdCancion() == null ? "registrar" : "editar");
+    return "form-cancion";
+}
+```
+
+Requiere el import `org.springframework.dao.DataAccessException`.
+
+**Por qué**
+
+- Si el usuario deja "Selecciona un álbum", Spring crea igual un objeto `Album` vacío (con `idAlbum` nulo), por lo que `@NotNull` sobre `album` no lo detecta y el guardado fallaba. La validación manual lo cubre y muestra el mensaje bajo el campo.
+- Con la restricción activa en la base, guardar una pista repetida lanza una excepción. Sin el `catch`, el usuario veía una página de error 500.
+- Se captura `DataAccessException`, la clase padre de las excepciones de acceso a datos de Spring, porque Spring puede traducir el error de la base a distintos tipos (`DataIntegrityViolationException`, `JpaSystemException`, etc.). Así el `catch` no depende de cuál de ellos salga.
+- Al devolver la vista `form-cancion` con el mismo objeto `cancion` (en lugar de redirigir), el formulario conserva lo que el usuario escribió y el mensaje aparece bajo el campo "Número de pista" para que lo corrija. También se conservan la lista de álbumes y el modo (registrar o editar).
+- Editar una canción sin cambiar su número de pista sigue funcionando, porque la actualización es sobre el mismo registro.
+
+---
+
+## 4. Manejo de errores en `AlbumCompletoController`
+
+**Qué se cambió**
+
+En `guardar`, el bloque `try` ahora tiene dos `catch` separados:
+
+```java
+try {
+    transaccionalService.registrarAlbumConCanciones(form.getAlbum(), validas);
+} catch (IllegalArgumentException e) {
+    model.addAttribute("error", "No se guardó nada: " + e.getMessage());
+    model.addAttribute("bandas", bandaService.listar());
+    return "form-album-completo";
+} catch (DataAccessException e) {
+    model.addAttribute("error", "No se guardó nada: revisa que no haya pistas repetidas en el álbum.");
+    model.addAttribute("bandas", bandaService.listar());
+    return "form-album-completo";
+}
+```
+
+Requiere el import `org.springframework.dao.DataAccessException`.
+
+**Por qué**
+
+- El `catch` original trataba `ConstraintViolationException`, que no cumplía su función: al pasar por los repositorios de Spring Data, las excepciones de Hibernate se traducen a la jerarquía `DataAccessException`, así que ese `catch` nunca se activaba. Además, si el import era `jakarta.validation`, correspondía a la validación de beans y no a la restricción `UNIQUE` de MySQL.
+- Los `catch` están separados para mostrar un mensaje fijo y limpio en el caso de duplicados. Mostrar `e.getMessage()` ahí expondría al usuario el texto técnico del error SQL.
+- `registrarAlbumConCanciones` es `@Transactional`, por lo que si una canción falla, el rollback deshace también el álbum que ya se había guardado. El mensaje "No se guardó nada" es cierto.
+
+---
+
+## Resumen
+
+- **`uniqueConstraints` (`id_album`, `numero_pista`)** en `Cancion.java`: evita pistas repetidas en un mismo álbum sin bloquearlas entre álbumes distintos.
+- **Restricción dentro del `CREATE TABLE cancion`** en el script SQL: la base garantiza la regla y el script corre completo, sin pasos extra.
+- **Validación de álbum obligatorio** en `CancionController`: evita guardar una canción sin álbum seleccionado.
+- **`catch (DataAccessException)`** en `CancionController`: muestra el error en el campo, conservando los datos del formulario, en vez de un error 500.
+- **`catch` separados para `IllegalArgumentException` y `DataAccessException`** en `AlbumCompletoController`: mensaje limpio para el usuario y rollback completo si algo falla.
+
+
 
 ## Correcciones de bugs encontrados en el camino
 - `UsuarioDetailsService`: faltaban imports de `UsernameNotFoundException` y `User`.
@@ -98,11 +234,814 @@ Si el paso 5 falla con clases no encontradas (`ClassNotFoundException`, `NoClass
 - `estadisticasPorBanda()`: estaba mal ubicada en `IBanda` (la query es `FROM Album`); movida a `IAlbum`.
 - Script SQL: faltaban las tablas `banda`/`album` en el script que solo tenía `usuario`/`cancion`, y el `DROP DATABASE` inicial las borraba sin recrearlas.
 
-## Pendiente
 
-- **2 reportes con JasperReports** (bandas y álbumes/canciones) — único ítem de código pesado que queda.
-- Despliegue en Microsoft Azure + workflow de GitHub Actions.
-- Documentación de Maven para el informe (`mvn dependency:tree`, explicación del `pom.xml` y el BOM).
-- Diagramas de casos de uso, modelo de base de datos, video demo reel.
-- Secciones narrativas del informe (resumen, introducción, diagnóstico SEPTE/PEST, justificación, metodología).
+# Cambios realizados v3
 
+Este documento resume los cambios hechos en MelodicVault para incorporar el **registro de usuarios** (seguridad, repositorio, DTO, controller y plantillas) y la razón de cada uno. A diferencia de la v2, incluye las plantillas `registro.html` y `login.html` porque son parte necesaria del flujo.
+
+---
+
+## 1. Ruta `/registro` pública en `SecurityConfig`
+
+**Qué se cambió**
+
+Se agregó `/registro` a la lista de rutas públicas:
+
+```java
+.requestMatchers("/", "/acerca", "/bandas", "/albumes", "/canciones", "/*/detalle/**", "/registro").permitAll()
+```
+
+**Por qué**
+
+- La regla final `.anyRequest().authenticated()` bloqueaba `/registro` para quien no tenía sesión. Spring Security lo interceptaba y lo redirigía a `/login`, así que el enlace "Regístrate" parecía llevar al mismo login y el controller nunca se ejecutaba.
+- Sin método explícito, `permitAll()` cubre el `GET` (formulario) y el `POST` (envío).
+- El `POST` debe ir a `/registro` y **no** a `/registro/guardar`: la regla `/*/guardar` exige rol `ADMIN` y lo bloquearía.
+
+---
+
+## 2. Método `existsByUsername` en `IUsuario`
+
+**Qué se cambió**
+
+```java
+boolean existsByUsername(String username);
+```
+
+**Por qué**
+
+- Permite comprobar si el usuario ya existe antes de guardar, para mostrar un mensaje claro en el campo en lugar de un error de base de datos.
+- Spring Data genera la consulta a partir del nombre del método; sin esta declaración el controller no compila.
+
+---
+
+## 3. Nuevo DTO `RegistroForm`
+
+**Qué se cambió**
+
+Se creó la clase `RegistroForm` (paquete `dto`) con tres campos y sus validaciones:
+
+```java
+public class RegistroForm {
+    @NotBlank(message = "El usuario es obligatorio")
+    @Size(min = 4, max = 50, message = "Entre 4 y 50 caracteres")
+    @Pattern(regexp = "^[A-Za-z0-9_.-]*$", message = "Solo letras, números, punto, guion y guion bajo")
+    private String username;
+
+    @NotBlank(message = "La contraseña es obligatoria")
+    @Size(min = 6, max = 72, message = "Entre 6 y 72 caracteres")
+    private String password;
+
+    @NotBlank(message = "Confirma la contraseña")
+    private String confirmar;
+
+    // getters y setters
+}
+```
+
+**Por qué**
+
+- Se usa un DTO y **no** la entidad `Usuario` directamente. Si el formulario recibiera un `Usuario`, cualquiera podría enviar `rol=ADMIN` en el `POST` y convertirse en administrador. El DTO no tiene campo `rol`, así que ese dato nunca llega desde el navegador.
+- El máximo de 72 caracteres en la contraseña responde al límite de BCrypt (72 bytes).
+- El campo `confirmar` solo existe en el formulario; no se guarda en la base.
+
+---
+
+## 4. Nuevo `RegistroController`
+
+**Qué se cambió**
+
+```java
+@Controller
+public class RegistroController {
+    @Autowired private IUsuario repo;
+    @Autowired private PasswordEncoder encoder;
+
+    @GetMapping("/registro")
+    public String form(Model model) {
+        model.addAttribute("registroForm", new RegistroForm());
+        return "registro";
+    }
+
+    @PostMapping("/registro")
+    public String registrar(@Valid @ModelAttribute("registroForm") RegistroForm form,
+                            BindingResult result, RedirectAttributes flash) {
+
+        if (!result.hasErrors() && !form.getPassword().equals(form.getConfirmar()))
+            result.rejectValue("confirmar", "nocoincide", "Las contraseñas no coinciden");
+
+        if (!result.hasErrors() && repo.existsByUsername(form.getUsername()))
+            result.rejectValue("username", "duplicado", "Ese usuario ya existe");
+
+        if (result.hasErrors()) return "registro";
+
+        Usuario u = new Usuario();
+        u.setUsername(form.getUsername());
+        u.setPassword(encoder.encode(form.getPassword()));
+        u.setRol("LECTOR");
+
+        try {
+            repo.save(u);
+        } catch (DataIntegrityViolationException e) {
+            result.rejectValue("username", "duplicado", "Ese usuario ya existe");
+            return "registro";
+        }
+
+        flash.addFlashAttribute("exito", "Cuenta creada. Ya puedes iniciar sesión.");
+        return "redirect:/login";
+    }
+}
+```
+
+**Por qué**
+
+- Las comprobaciones de coincidencia de contraseñas y de usuario duplicado solo se hacen si no hay errores previos de validación, para no mostrar mensajes encadenados.
+- La contraseña se guarda siempre con `BCryptPasswordEncoder`, nunca en texto plano.
+- El rol se fija en el servidor como `LECTOR`, **sin** el prefijo `ROLE_` (Spring lo agrega con `roles(...)` en `UsuarioDetailsService`). Como el sistema solo distingue `ADMIN` en `SecurityConfig`, `LECTOR` no recibe permisos de mantenimiento.
+- El `try/catch` de `DataIntegrityViolationException` cubre una condición de carrera: si otra persona registra el mismo usuario entre el `existsByUsername` y el `save`, la restricción `UNIQUE` de `username` rechaza el segundo y el usuario ve el mensaje en el campo en vez de un error 500.
+- Al registrar con éxito se redirige a `/login` con un mensaje flash, siguiendo el patrón `POST → redirect` del resto del sistema.
+- Cuando hay errores se devuelve la vista `registro` (sin redirigir) para conservar el nombre de usuario escrito y mostrar los mensajes bajo cada campo.
+
+---
+
+## 5. Nueva plantilla `registro.html`
+
+**Qué se cambió**
+
+Se creó `src/main/resources/templates/registro.html` con el mismo `<head>`, cabecera y pie que `login.html`, y este formulario en el `<main>`:
+
+```html
+<form th:action="@{/registro}" th:object="${registroForm}" method="post">
+    <input type="text"     th:field="*{username}"  class="form-control input-vault" autofocus>
+    <div class="text-danger small" th:if="${#fields.hasErrors('username')}" th:errors="*{username}"></div>
+
+    <input type="password" th:field="*{password}"  class="form-control input-vault">
+    <div class="text-danger small" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+
+    <input type="password" th:field="*{confirmar}" class="form-control input-vault">
+    <div class="text-danger small" th:if="${#fields.hasErrors('confirmar')}" th:errors="*{confirmar}"></div>
+
+    <a th:href="@{/login}" class="btn-cancelar">Cancelar</a>
+    <button type="submit" class="btn-guardar">Crear cuenta</button>
+</form>
+```
+
+**Por qué**
+
+- `th:action="@{/registro}"` incluye automáticamente el token CSRF; con `action="/registro"` a secas el `POST` daría 403.
+- `th:object` y `th:field` enlazan el formulario con `RegistroForm` y permiten mostrar los errores con `th:errors`.
+- Thymeleaf no vuelve a rellenar los campos `type="password"`: si hay un error, el usuario reescribe las contraseñas, que es el comportamiento correcto.
+- El botón **Cancelar** devuelve a `/login`.
+
+
+---
+
+## 6. Cambios en `login.html`
+
+**Qué se cambió**
+
+Debajo del alert de error, el mensaje de éxito:
+
+```html
+<div class="alert alert-success" th:if="${exito}" th:text="${exito}"></div>
+```
+
+Debajo del formulario, el enlace al registro:
+
+```html
+<p class="mt-3 text-center">¿No tienes cuenta? <a th:href="@{/registro}">Regístrate</a></p>
+```
+
+**Por qué**
+
+- El mensaje flash `exito` enviado por `RegistroController` solo se ve si `login.html` lo muestra.
+- El enlace es la puerta de entrada al registro. Opcionalmente puede añadirse también en el menú con `sec:authorize="!isAuthenticated()"`.
+
+
+---
+
+## Resumen
+
+- `/registro` agregado a `permitAll()` en `SecurityConfig`: evita la redirección al login; el `POST` va a `/registro`, no a `/registro/guardar`.
+- `existsByUsername` en `IUsuario`: permite detectar usuarios duplicados antes de guardar.
+- `RegistroForm` (DTO): valida usuario y contraseñas, y evita que alguien se asigne el rol `ADMIN` desde el formulario.
+- `RegistroController`: valida, cifra la contraseña con BCrypt, fija el rol `LECTOR` y maneja la carrera de usuarios duplicados.
+- `registro.html`: formulario con CSRF, errores por campo y contraseñas que no se rellenan.
+- `login.html`: muestra el mensaje de éxito y enlaza a "Regístrate".
+
+# Cambios realizados v4
+
+Este documento resume los cambios hechos en MelodicVault para incorporar **reportes PDF con JasperReports** y la razón de cada uno. La v3 cubrió el registro de usuarios y el login; la v4 cubre solo el módulo de reportes.
+
+**Resultado:** cualquier usuario con sesión (Administrador o Lector) puede descargar dos reportes en PDF:
+
+| Reporte | Ruta | Se descarga desde |
+|---|---|---|
+| Canciones de un álbum | `/reportes/album/{id}` | Detalle de álbum |
+| Álbumes de una banda | `/reportes/banda/{id}` | Detalle de banda |
+
+---
+
+## 1. Dependencias de JasperReports en el `pom.xml`
+
+**Qué se cambió**
+
+```xml
+<dependency>
+    <groupId>net.sf.jasperreports</groupId>
+    <artifactId>jasperreports</artifactId>
+    <version>6.20.6</version>
+</dependency>
+<dependency>
+    <groupId>net.sf.jasperreports</groupId>
+    <artifactId>jasperreports-fonts</artifactId>
+    <version>6.20.6</version>
+</dependency>
+```
+
+**Por qué**
+
+- Se usa la serie 6.x porque es estable con Spring Boot 3.3.4 y Java 17, y la 7.x cambió la estructura de módulos y el formato del `.jrxml`.
+- `jasperreports-fonts` evita el error "Could not load the following font: DejaVu Sans" al exportar a PDF.
+
+---
+
+## 2. Consulta de canciones por álbum en `IAlbum`
+
+**Qué se cambió**
+
+```java
+@Query("SELECT c FROM Cancion c WHERE c.album.idAlbum = :id ORDER BY c.numeroPista")
+List<Cancion> listadoDeCanciones(@Param("id") int id);
+```
+
+Se declaró en `IAlbumService` y se implementó en `AlbumService`:
+
+```java
+@Override
+public List<Cancion> listadoDeCanciones(int id) {
+    return data.listadoDeCanciones(id);
+}
+```
+
+**Por qué**
+
+- Trae solo las canciones del álbum pedido, ordenadas por número de pista, no toda la tabla.
+- JPQL usa el nombre de la **entidad** (`Cancion`) y sus atributos (`idAlbum`, `numeroPista`), no los de la tabla.
+- Devuelve una `List`, no un `Optional`, porque un álbum tiene varias canciones.
+- `AlbumService` solo entrega datos; la lógica del reporte vive en otro service.
+
+---
+
+## 3. Nuevo `ReporteService`
+
+**Qué se cambió**
+
+Se creó un service dedicado con un método por reporte:
+
+```java
+public byte[] exportarCancionesAlbum(int idAlbum) throws JRException { ... }
+public byte[] exportarAlbumesBanda(int idBanda) throws JRException { ... }
+```
+
+Cada método:
+
+1. Busca la entidad (`Album` o `Banda`) y lanza `IllegalArgumentException` si no existe.
+2. Arma el mapa de **parámetros** (título, banda, país, género, año).
+3. Compila el `.jrxml` desde `/reportes/...`.
+4. Llena el reporte con `JRBeanCollectionDataSource` y exporta con `JasperExportManager.exportReportToPdf`.
+5. Devuelve el PDF como `byte[]`.
+
+**Por qué**
+
+- Separa responsabilidades: `AlbumService` y `BandaService` hacen CRUD; `ReporteService` genera documentos.
+- Un tercer reporte solo agrega otro método aquí, sin tocar los demás services.
+- Los nombres de los `<field>` del `.jrxml` coinciden con los atributos de las entidades (`numeroPista`, `titulo`, `duracionSegundos`, `anio`, `tipo`, `rating`).
+
+---
+
+## 4. Nuevo `ReporteController`
+
+**Qué se cambió**
+
+```java
+@Controller
+@RequestMapping("/reportes")
+public class ReporteController {
+
+    @GetMapping("/album/{id}")
+    public ResponseEntity<byte[]> reporteAlbum(@PathVariable int id) throws JRException { ... }
+
+    @GetMapping("/banda/{id}")
+    public ResponseEntity<byte[]> reporteBanda(@PathVariable int id) throws JRException { ... }
+}
+```
+
+Ambos devuelven `Content-Type: application/pdf` con `Content-Disposition: inline`.
+
+**Por qué**
+
+- El controller solo recibe el id y delega; no tiene lógica de reporte.
+- `inline` abre el PDF en el navegador en lugar de forzar la descarga.
+- Es un controller aparte porque `AlbumController` y `BandaController` ya tienen su CRUD.
+
+---
+
+## 5. Seguridad: sin cambios en `SecurityConfig`
+
+**Qué se verificó**
+
+Las rutas `/reportes/album/{id}` y `/reportes/banda/{id}` no coinciden con ninguna regla específica:
+
+- `/*/detalle/**`: el segundo segmento no es `detalle`.
+- `/*/nuevo`, `/*/editar/**`, `/*/guardar`, `/*/eliminar/**`, `/albumes/completo/**`: tampoco.
+
+**Por qué**
+
+- Caen en `anyRequest().authenticated()`: entran **ADMIN y LECTOR**, y quien no tiene sesión es enviado a `/login`.
+- Regla a recordar: el segundo segmento de una ruta de reportes no debe llamarse `detalle`, `nuevo`, `editar`, `guardar` ni `eliminar`.
+
+---
+
+## 6. Plantillas de reporte `.jrxml`
+
+**Qué se cambió**
+
+Se crearon en `src/main/resources/reportes/`:
+
+| Archivo | Contenido |
+|---|---|
+| `reporte_canciones.jrxml` | Título del álbum, banda y tabla Pista / Título / Duración |
+| `reporte_albumes.jrxml` | Banda, país, género, año de formación y tabla Año / Título / Tipo / Rating |
+
+**Detalles de diseño**
+
+- Estilo común `celda`, con borde de 0.5 y relleno lateral, para que la tabla tenga cuadros bien definidos.
+- Cabecera de columnas en gris con texto en negrita.
+- Pie de página con "Melodic Vault - Página N".
+- La duración se guarda en segundos y se muestra como `m:ss` (por ejemplo, 245 s → `4:05`); si es nula, muestra `-`.
+- El rating se muestra con un decimal; si es nulo, muestra `-`.
+- `whenNoDataType="AllSectionsNoDetail"` en el reporte de álbumes: una banda sin álbumes genera un PDF con título y cabecera, en vez de un error.
+- Un solo `<detail>` por reporte: Jasper no acepta dos.
+
+---
+
+## 7. Botones "Descargar PDF" en las vistas
+
+**Qué se cambió**
+
+En `detalle-album.html` y `detalle-banda.html`:
+
+```html
+<a sec:authorize="isAuthenticated()"
+   th:href="@{/reportes/banda/{id}(id=${banda.idBanda})}"
+   target="_blank" class="btn-secundario">
+    Descargar PDF
+</a>
+```
+
+**Por qué**
+
+- `isAuthenticated()` y no `hasRole('ADMIN')`: el Lector también debe poder descargar.
+- Quien no inició sesión no ve el botón.
+- `target="_blank"` abre el PDF en otra pestaña y no saca al usuario del catálogo.
+- El botón solo oculta la opción; el bloqueo real lo hace el servidor.
+
+---
+
+## 8. Problemas encontrados y cómo se resolvieron
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `JRBeanCollectionDataSource` en rojo | Faltaba el import del subpaquete `data` | `import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;` |
+| `@PathVariable` y `MediaType` en rojo | Imports faltantes en el controller | Importar de `org.springframework.web.bind.annotation` y `org.springframework.http` |
+| `BindException: La dirección ya se está usando` | Otra ejecución de la app ocupaba el puerto 8090 | Terminar la ejecución anterior antes de volver a correr |
+| Error 500 al abrir el reporte | El `.jrxml` tenía dos bloques `<detail>` | Dejar solo el que usa `style="celda"` |
+
+---
+
+## Limitaciones conocidas
+
+- El `.jrxml` se compila en **cada petición**. Para este proyecto es suficiente; en producción se guardaría el `JasperReport` compilado en un campo y se reutilizaría.
+- `banda.getAlbumes()` es una relación `LAZY`: funciona porque Spring Boot mantiene activo `open-in-view` por defecto. Si se desactiva, habría que cargar la colección dentro de una transacción.
+- Los reportes se exportan solo a PDF.
+
+---
+
+## Resumen
+
+- **pom.xml:** `jasperreports` y `jasperreports-fonts` 6.20.6.
+- **IAlbum / AlbumService:** `listadoDeCanciones(id)` con JPQL ordenado por pista.
+- **ReporteService:** un método por reporte que compila, llena y exporta a PDF.
+- **ReporteController:** `/reportes/album/{id}` y `/reportes/banda/{id}`.
+- **SecurityConfig:** sin cambios; las rutas exigen sesión y sirven a ADMIN y LECTOR.
+- **`reporte_canciones.jrxml` y `reporte_albumes.jrxml`:** tablas con bordes, duración en `m:ss`, y manejo de banda sin álbumes.
+- **Vistas:** botón "Descargar PDF" visible para cualquier usuario con sesión.
+
+
+# Cambios realizados v5
+
+ los reportes PDF funcionan igual para el usuario, pero ahora son más rápidos y no dependen de una configuración implícita de Spring Boot.
+
+---
+
+## 1. Compilación de los reportes una sola vez
+
+**Qué se cambió**
+
+En `ReporteService` se guardan los reportes compilados en campos y se cargan al iniciar la aplicación:
+
+```java
+private JasperReport reporteCanciones;
+private JasperReport reporteAlbumes;
+
+@PostConstruct
+public void compilarReportes() {
+    reporteCanciones = compilar("/reportes/reporte_canciones.jrxml");
+    reporteAlbumes   = compilar("/reportes/reporte_albumes.jrxml");
+}
+
+private JasperReport compilar(String ruta) {
+    try (InputStream in = getClass().getResourceAsStream(ruta)) {
+        if (in == null) {
+            throw new IllegalStateException("No se encontró la plantilla: " + ruta);
+        }
+        return JasperCompileManager.compileReport(in);
+    } catch (JRException | IOException e) {
+        throw new IllegalStateException("No se pudo compilar " + ruta, e);
+    }
+}
+```
+
+Los métodos `exportarCancionesAlbum` y `exportarAlbumesBanda` ahora usan los campos ya compilados en lugar de compilar el `.jrxml` en cada llamada.
+
+**Por qué**
+
+- Antes, cada clic en "Descargar PDF" compilaba el `.jrxml` desde cero, que es la parte más lenta del proceso.
+- El `JasperReport` compilado es de solo lectura, así que varios usuarios pueden usarlo a la vez sin riesgo.
+- Se usa `try-with-resources` para cerrar el `InputStream`; antes quedaba abierto en cada petición.
+- Es `jakarta.annotation.PostConstruct`, no `javax`: con Spring Boot 3 la de `javax` no existe.
+
+**Efectos a tener en cuenta**
+
+- Si un `.jrxml` tiene un error, la aplicación **no arranca** y el error aparece de inmediato en la consola, en lugar de descubrirse con un error 500 al hacer clic.
+- Si se edita un `.jrxml`, hay que **reiniciar la aplicación** para que el cambio se aplique.
+
+---
+
+## 2. Carga de álbumes de la banda con `@EntityGraph`
+
+**Qué se cambió**
+
+Se expuso en la capa de servicio el método que `IBanda` ya tenía:
+
+```java
+// IBanda (ya existía)
+@EntityGraph(attributePaths = "albumes")
+Optional<Banda> findWithAlbumesByIdBanda(Integer idBanda);
+```
+
+```java
+// IBandaService
+Optional<Banda> listarConAlbumes(int id);
+
+// BandaService
+@Override
+public Optional<Banda> listarConAlbumes(int id) {
+    return data.findWithAlbumesByIdBanda(id);
+}
+```
+
+Y en `ReporteService.exportarAlbumesBanda` se cambió solo la búsqueda:
+
+```java
+// antes
+Banda banda = bandaService.listarId(idBanda)
+
+// ahora
+Banda banda = bandaService.listarConAlbumes(idBanda)
+```
+
+**Por qué**
+
+- `Banda.albumes` es una relación `LAZY`. Antes el reporte funcionaba solo porque Spring Boot mantiene `open-in-view` activo por defecto; si alguien lo desactivaba, el reporte fallaba con `LazyInitializationException`.
+- Con `@EntityGraph`, la banda y sus álbumes se traen en **una sola consulta**, así que el reporte ya no depende de esa configuración.
+- No hace falta `@Transactional`: la colección llega cargada desde la consulta.
+- `listarId` se mantiene sin cambios porque `BandaController` lo usa en el detalle de banda.
+
+---
+
+## 3. Qué no cambió
+
+- Las rutas `/reportes/album/{id}` y `/reportes/banda/{id}`.
+- `SecurityConfig`: siguen exigiendo sesión y sirven a Administrador y Lector.
+- Los archivos `.jrxml` y las vistas con el botón "Descargar PDF".
+
+---
+
+## Pruebas realizadas
+
+| Prueba | Resultado esperado |
+|---|---|
+| Arrancar la aplicación | Sin errores en consola; los dos reportes se compilan al inicio |
+| `/reportes/album/1` | PDF con las canciones del álbum, ordenadas por pista |
+| `/reportes/banda/1` | PDF con los álbumes de la banda |
+| Banda sin álbumes | PDF con título y cabecera, sin error |
+| Detalle de banda en la web | Sigue funcionando con `listarId` |
+
+---
+
+## Limitaciones restantes
+
+- Los reportes se exportan solo a PDF.
+- Un cambio en un `.jrxml` requiere reiniciar la aplicación.
+
+---
+
+## Resumen
+
+- **ReporteService:** compila los `.jrxml` una vez con `@PostConstruct` y cierra el `InputStream`.
+- **IBandaService / BandaService:** nuevo `listarConAlbumes(id)` apoyado en el `@EntityGraph` existente.
+- **ReporteService.exportarAlbumesBanda:** usa `listarConAlbumes` y deja de depender de `open-in-view`.
+- **Las dos limitaciones de la v4 quedan resueltas.**
+
+---
+
+# Cambios realizados v6
+
+La aplicación funciona igual para el usuario en lo esencial, pero ahora valida mejor los datos, responde con páginas de error comprensibles y evita mostrar avisos contradictorios o campos vacíos.
+
+---
+
+## 1. Entidad `Cancion`: restricción única y duración obligatoria
+
+**Qué se cambió**
+
+Se quitó `uniqueConstraints` de `@Table`. Ahora queda:
+
+```java
+@Entity
+@Table(name = "cancion")
+public class Cancion {
+    // atributos
+}
+```
+
+Y el campo `duracionSegundos` pasa a ser obligatorio:
+
+```java
+// antes
+@Min(0)
+private Integer duracionSegundos;
+
+// ahora
+@NotNull(message = "La duración es obligatoria")
+@Min(value = 0, message = "La duración no puede ser negativa")
+private Integer duracionSegundos;
+```
+
+**Por qué**
+
+- La restricción `UNIQUE (id_album, numero_pista)` ya la define la base de datos; declararla también en la entidad duplicaba la regla.
+- Se actualizó la base de datos para que sea la única fuente de esa restricción.
+- `@Min` por sí solo acepta `null`, así que una canción podía guardarse sin duración. Con `@NotNull` el valor vacío ya no pasa.
+
+---
+
+## 2. Entidad `Album`: cascada sin `orphanRemoval`
+
+**Qué se cambió**
+
+```java
+@OneToMany(mappedBy = "album", cascade = CascadeType.REMOVE)
+```
+
+Sin `orphanRemoval`. Este cambio es una corrección anterior a v6 que no se había registrado.
+
+**Por qué**
+
+- El formulario de edición no envía las canciones del álbum; con `orphanRemoval` activo, guardar un álbum las trataría como huérfanas y las borraría.
+- Sin `orphanRemoval`, guardar un álbum no puede borrar sus canciones.
+- Eliminar el álbum sigue eliminando sus canciones gracias a `CascadeType.REMOVE`.
+
+---
+
+## 3. Validación manual en `AlbumTransaccionalService`
+
+**Qué se cambió**
+
+Al registrar un álbum completo se validan las canciones una por una:
+
+```java
+if (c.getDuracionSegundos() == null || c.getDuracionSegundos() < 0)
+    throw new IllegalArgumentException("Falta la duración (o es negativa) en: " + c.getTitulo());
+if (c.getTitulo().length() > 100)
+    throw new IllegalArgumentException("Hay un título de más de 100 caracteres");
+```
+
+**Por qué**
+
+- En el registro completo las canciones no pasan por `@Valid`, porque el usuario puede dejar filas vacías (por ejemplo, un álbum con 5 canciones y 10 filas disponibles).
+- Sin esta validación, una duración vacía o un título demasiado largo llegaban a la base de datos.
+
+---
+
+## 4. `BandaController.eliminar` verifica que la banda exista
+
+**Qué se cambió**
+
+```java
+// antes
+@GetMapping("/eliminar/{id}")
+public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
+    service.delete(id);
+    flash.addFlashAttribute("mensaje", "Banda eliminada correctamente.");
+    return "redirect:/bandas";
+}
+
+// ahora
+@GetMapping("/eliminar/{id}")
+public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
+    if (service.listarId(id).isEmpty()) {
+        flash.addFlashAttribute("error", "La banda no existe.");
+        return "redirect:/bandas";
+    }
+    service.delete(id);
+    flash.addFlashAttribute("mensaje", "Banda eliminada correctamente.");
+    return "redirect:/bandas";
+}
+```
+
+**Por qué**
+
+- Antes, eliminar un id inexistente mostraba igualmente "Banda eliminada correctamente.", lo cual era falso.
+- Ahora el usuario ve "La banda no existe." cuando corresponde.
+
+---
+
+## 5. Manejo de errores: `ReporteController`, `SecurityConfig` y `error.html`
+
+**Qué se cambió**
+
+En `ReporteController` se agregó un manejador de excepciones:
+
+```java
+@ExceptionHandler(IllegalArgumentException.class)
+@ResponseStatus(HttpStatus.NOT_FOUND)
+public String noExiste(Model model) {
+    model.addAttribute("status", 404);
+    return "error";
+}
+```
+
+En `SecurityConfig` se agregó `/error` a las rutas públicas:
+
+```java
+.requestMatchers("/", "/acerca", "/bandas", "/albumes", "/canciones",
+                 "/*/detalle/**", "/registro", "/error").permitAll()
+```
+
+Y se creó la plantilla `error.html`:
+
+```html
+<main class="contenedor">
+  <section class="titulo-pagina">
+    <p class="tag"><i class="bi bi-exclamation-triangle"></i> Error <span th:text="${status}">500</span></p>
+    <h1 th:if="${status == 403}">No tienes permiso para esta acción</h1>
+    <h1 th:if="${status == 404}">No encontramos lo que buscas</h1>
+    <h1 th:if="${status != 403 && status != 404}">Ocurrió un problema</h1>
+    <p><a th:href="@{/}" class="btn-secundario">Volver al inicio</a></p>
+  </section>
+</main>
+```
+
+**Por qué**
+
+- `ReporteController` y `ReporteService` declaraban `throws IOException`, pero nadie atrapaba el error: se delegaba hacia arriba y terminaba como un error técnico sin tratar. Ahora `ReporteController` lo atrapa en lugar de delegarlo.
+- Un id de reporte inexistente produce un 404 con una vista comprensible.
+- `/error` debe ser pública; de lo contrario, un error en una página pública redirigiría al login en lugar de mostrar el mensaje.
+- `error.html` reemplaza el error por defecto: muestra el código y un mensaje distinto para 403, 404 y cualquier otro error, con un botón para volver al inicio.
+
+---
+
+## 6. Cambios en las vistas
+
+### 6.1 `bandas.html`: dos avisos de lista vacía con condiciones distintas
+
+Antes ambos avisos usaban `th:if="${bandas.isEmpty()}"` y se mostraban a la vez. Ahora cada uno tiene su condición:
+
+```html
+<!-- No hay resultados para la búsqueda -->
+<div class="vacio" th:if="${bandas.isEmpty() && buscar != null && !buscar.isBlank()}">
+    <div class="ancla"><i class="bi bi-search"></i></div>
+    <p>No se encontraron bandas con ese criterio.</p>
+</div>
+
+<!-- No hay bandas registradas -->
+<div class="vacio" th:if="${bandas.isEmpty() && (buscar == null || buscar.isBlank())}">
+    <div class="ancla"><i class="bi bi-vinyl"></i></div>
+    <p>Aún no hay bandas registradas.</p>
+    <a sec:authorize="hasRole('ADMIN')" th:href="@{/bandas/nuevo}" class="btn-principal">
+        <i class="bi bi-plus-circle"></i> Registrar primera banda
+    </a>
+</div>
+```
+
+### 6.2 `form-banda.html` y entidades: errores visibles y longitud máxima
+
+`descripcion` (máx. 500) e `imagenUrl` no tenían dónde mostrar el error: si se excedía el límite, el formulario volvía sin ningún aviso.
+
+```html
+<!-- URL de imagen -->
+<span class="text-danger" th:if="${#fields.hasErrors('imagenUrl')}" th:errors="*{imagenUrl}"></span>
+
+<!-- Descripción -->
+<textarea ... th:field="*{descripcion}" maxlength="500"></textarea>
+<span class="text-danger" th:if="${#fields.hasErrors('descripcion')}" th:errors="*{descripcion}"></span>
+```
+
+Como complemento, se limitó el tamaño de las URL en las entidades de banda y álbum:
+
+```java
+@Size(max = 255)
+private String portadaUrl;
+
+@Size(max = 255)
+private String imagenUrl;
+```
+
+### 6.3 `form-album.html`: título dinámico
+
+```html
+<!-- antes -->
+<p class="tag"><i class="bi bi-disc"></i> Nueva discografía</p>
+
+<!-- ahora -->
+<span th:text="${modo == 'editar'} ? 'Editar discografía' : 'Nueva discografía'">Nueva discografía</span>
+```
+
+Antes decía siempre "Nueva discografía", incluso al editar.
+
+### 6.4 Rating nulo en `detalle-album.html`, `detalle-banda.html` y `albumes.html`
+
+Un álbum sin rating dejaba el valor vacío. Ahora se muestra "—":
+
+```html
+<!-- detalle-album.html -->
+<span>Rating: <span th:text="${album.rating != null} ? ${album.rating} : '—'">9.0</span></span>
+
+<!-- detalle-banda.html -->
+<span class="rating">
+    Rating <span th:text="${a.rating != null} ? ${a.rating} : '—'">9.0</span>
+</span>
+
+<!-- albumes.html -->
+<span>⭐ <span th:text="${a.rating != null} ? ${a.rating} : '—'">9.0</span></span>
+```
+
+---
+
+## 7. Qué no cambió
+
+- Las rutas de reportes `/reportes/album/{id}` y `/reportes/banda/{id}`.
+- La compilación de reportes con `@PostConstruct` y la carga con `@EntityGraph` de la v5.
+- Los archivos `.jrxml`.
+- Los permisos del resto de rutas en `SecurityConfig`; solo se agregó `/error`.
+
+---
+
+## Pruebas realizadas
+
+| Prueba | Resultado esperado |
+|---|---|
+| Guardar una canción sin duración | Mensaje "La duración es obligatoria" |
+| Guardar una canción con duración negativa | Mensaje "La duración no puede ser negativa" |
+| Registro completo con una duración vacía o un título de más de 100 caracteres | Error de validación con el título de la canción afectada |
+| Editar un álbum y guardar | Las canciones del álbum se conservan |
+| Eliminar un álbum | Se eliminan también sus canciones |
+| `/bandas/eliminar/{id}` con un id inexistente | Mensaje "La banda no existe." |
+| Buscar una banda que no existe | Solo aparece "No se encontraron bandas con ese criterio." |
+| Lista de bandas vacía sin búsqueda | Solo aparece "Aún no hay bandas registradas." |
+| `/reportes/album/{id}` con un id inexistente | Página `error.html` con código 404 |
+| Error en una página pública sin sesión | Página `error.html`, sin redirigir al login |
+| Descripción de más de 500 caracteres o URL de más de 255 | El formulario muestra el mensaje de error bajo el campo |
+| Abrir el formulario de álbum en modo editar | La etiqueta dice "Editar discografía" |
+| Álbum sin rating | Se muestra "—" en el detalle de álbum, el detalle de banda y el listado de álbumes |
+
+---
+
+## Limitaciones restantes
+
+- La validación de duración y título en `AlbumTransaccionalService` es manual y repite las reglas de `Cancion`; si cambian las anotaciones de la entidad, hay que actualizar ambos lugares.
+- El manejador de `ReporteController` solo cubre `IllegalArgumentException`; cualquier otro error se muestra con `error.html` pero con el código que asigne Spring.
+
+---
+
+## Resumen
+
+- **Cancion:** se quita el `UNIQUE` duplicado de la entidad y `duracionSegundos` pasa a ser obligatorio.
+- **Album:** `cascade = CascadeType.REMOVE` sin `orphanRemoval`, para que editar no borre canciones.
+- **AlbumTransaccionalService:** valida duración y título de cada canción en el registro completo.
+- **BandaController.eliminar:** comprueba que la banda exista antes de eliminar.
+- **ReporteController / SecurityConfig / error.html:** los errores se atrapan y se muestran en una página comprensible, accesible sin sesión.
+- **Vistas:** avisos de lista vacía separados, errores visibles en `form-banda.html`, título dinámico en `form-album.html` y rating nulo mostrado como "—".
+- **Entidades de banda y álbum:** `@Size(max = 255)` en las URL de imagen y portada.

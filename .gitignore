@@ -11,6 +11,8 @@ bin/
 # IntelliJ IDEA
 .idea/
 *.iml
+<<<<<<< HEAD
+=======
 
 # VS Code
 .vscode/
@@ -25,3 +27,4 @@ Thumbs.db
 # Por si alguien exporta un zip dentro del proyecto sin querer
 *.zip
 .metadata/
+.~lock.*#

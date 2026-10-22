@@ -19,9 +19,9 @@ CREATE TABLE album (
     id_album     INT AUTO_INCREMENT PRIMARY KEY,
     titulo       VARCHAR(100) NOT NULL,
     anio         INT          NOT NULL,
-    tipo         VARCHAR(45)  NOT NULL,
-    rating       DECIMAL(3,1),
-    formato      VARCHAR(45),
+    tipo         VARCHAR(255) NOT NULL,
+    rating       DOUBLE,
+    formato      VARCHAR(255),
     portada_url  VARCHAR(255),
     descripcion  VARCHAR(500),
     id_banda     INT          NOT NULL,
@@ -31,19 +31,20 @@ CREATE TABLE album (
 
 CREATE TABLE usuario (
     id_usuario  INT AUTO_INCREMENT PRIMARY KEY,
-    username    VARCHAR(50)  NOT NULL UNIQUE,
-    password    VARCHAR(100) NOT NULL,
-    rol         VARCHAR(20)  NOT NULL
+    username    VARCHAR(255) NOT NULL UNIQUE,
+    password    VARCHAR(255) NOT NULL,
+    rol         VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE cancion (
     id_cancion         INT AUTO_INCREMENT PRIMARY KEY,
     titulo             VARCHAR(100) NOT NULL,
     numero_pista       INT          NOT NULL,
-    duracion_segundos  INT,
+    duracion_segundos  INT NOT NULL,
     id_album           INT          NOT NULL,
     CONSTRAINT fk_cancion_album FOREIGN KEY (id_album) REFERENCES album(id_album)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT uq_cancion_album_pista UNIQUE (id_album, numero_pista)
 );
 
 -- ============ DATOS ============
@@ -89,7 +90,7 @@ INSERT INTO usuario (username, password, rol) VALUES
 
 -- clave del admin : admin123
 
-('lector', '$2b$10$DQuGrGBMFRwENahhD4sQ.uEe4hfvlGi/RHImkPataPw.MNhm6iFBm', 'USER');
+('lector', '$2b$10$DQuGrGBMFRwENahhD4sQ.uEe4hfvlGi/RHImkPataPw.MNhm6iFBm', 'LECTOR');
 
 -- clave del lector : lector123
 

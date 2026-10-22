@@ -90,6 +90,12 @@
 		        <a th:href="@{/bandas}" class="btn-secundario">
 		            Volver al catálogo
 		        </a>
+				<a sec:authorize="isAuthenticated()"
+				   th:href="@{/reportes/banda/{id}(id=${banda.idBanda})}"
+				   target="_blank" class="btn-secundario">
+				    Descargar PDF
+				</a>
+				
 		    </div>
 		</section>
 
@@ -125,7 +131,7 @@
 	            </p>
 
 	            <span class="rating">
-	                Rating <span th:text="${a.rating}">9.0</span>
+	                Rating <span th:text="${a.rating != null} ? ${a.rating} : '—'">9.0</span>
 	            </span>
 	        </article>
 

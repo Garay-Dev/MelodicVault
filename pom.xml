@@ -14,8 +14,8 @@
     <groupId>pe.cibertec</groupId>
     <artifactId>MelodicVault</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>LPI_CL1_VidalCarlos</name>
-    <description>Mantenimiento de embarcaciones - Carlos Vidal</description>
+    <name>MelodicVault</name>
+    <description>Catálogo web de bandas, álbumes y canciones</description>
 
     <properties>
         <java.version>17</java.version>
@@ -61,6 +61,19 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        
+        <!-- JasperReports -->
+		<dependency>
+		    <groupId>net.sf.jasperreports</groupId>
+		    <artifactId>jasperreports</artifactId>
+		    <version>6.20.6</version>
+		</dependency>
+		<dependency>
+		    <groupId>net.sf.jasperreports</groupId>
+		    <artifactId>jasperreports-fonts</artifactId>
+		    <version>6.20.6</version>
+		</dependency>
+        
     </dependencies>
 
     <build>

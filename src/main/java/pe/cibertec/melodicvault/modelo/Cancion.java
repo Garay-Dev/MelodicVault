@@ -11,9 +11,12 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.persistence.UniqueConstraint;
+
 
 @Entity
 @Table(name = "cancion")
+
 public class Cancion {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer idCancion;
@@ -24,8 +27,9 @@ public class Cancion {
     @NotNull(message = "El número de pista es obligatorio")
     @Min(value = 1, message = "La pista debe ser 1 o mayor")
     private Integer numeroPista;
-
-    @Min(0)
+    
+    @NotNull(message = "La duración es obligatoria")
+    @Min(value = 0, message = "La duración no puede ser negativa")
     private Integer duracionSegundos;
 
     @NotNull(message = "Debe seleccionar un álbum")

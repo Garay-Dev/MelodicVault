@@ -3,6 +3,8 @@ package pe.cibertec.melodicvault.controller;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -13,6 +15,8 @@ import pe.cibertec.melodicvault.dto.AlbumCompletoForm;
 import pe.cibertec.melodicvault.interfacesService.IBandaService;
 import pe.cibertec.melodicvault.modelo.Cancion;
 import pe.cibertec.melodicvault.service.AlbumTransaccionalService;
+import org.springframework.dao.DataIntegrityViolationException;
+
 
 @Controller
 @RequestMapping("/albumes/completo")
@@ -56,6 +60,10 @@ public class AlbumCompletoController {
             transaccionalService.registrarAlbumConCanciones(form.getAlbum(), validas);
         } catch (IllegalArgumentException e) {
             model.addAttribute("error", "No se guardó nada: " + e.getMessage());
+            model.addAttribute("bandas", bandaService.listar());
+            return "form-album-completo";
+        } catch (DataAccessException e) {
+            model.addAttribute("error", "No se guardó nada: revisa que no haya pistas repetidas en el álbum.");
             model.addAttribute("bandas", bandaService.listar());
             return "form-album-completo";
         }

@@ -1534,3 +1534,97 @@ footer {
     }
 }
 
+
+/* ===== formulario álbum: pulido ===== */
+.formulario-vault textarea.input-vault {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.formulario-vault .form-select.input-vault {
+    padding-right: 2.5rem;
+    cursor: pointer;
+}
+
+.formulario-vault .form-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.formulario-vault .text-danger {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #b23a48 !important;
+}
+
+.formulario-vault .input-vault::placeholder {
+    color: #b5aa96;
+}
+
+/* vista previa con portada real */
+.preview-cover {
+    flex-shrink: 0;
+    transition: transform .2s;
+}
+
+.preview-cover.con-imagen {
+    background-size: cover;
+    background-position: center;
+    border: 3px solid var(--dorado);
+    box-shadow: 6px 6px 0 #111;
+}
+
+.preview-cover.con-imagen i {
+    display: none;
+}
+
+.preview-album-form h3 {
+    word-break: break-word;
+}
+
+/* ===== álbum completo: filas de canciones ===== */
+.seccion-canciones {
+    margin-top: 40px;
+}
+
+.fila-cancion {
+    display: grid;
+    grid-template-columns: 38px 100px 1fr 170px;
+    gap: 12px;
+    align-items: center;
+    background: #fbf6ea;
+    border: 1px solid #efe6d4;
+    border-radius: 16px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    transition: border-color .15s;
+}
+
+.fila-cancion:focus-within {
+    border-color: var(--dorado);
+}
+
+.num-fila {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--grafito);
+    color: var(--dorado);
+    font-weight: 800;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 700px) {
+    .fila-cancion {
+        grid-template-columns: 1fr;
+    }
+    .num-fila {
+        margin-bottom: 2px;
+    }
+}
