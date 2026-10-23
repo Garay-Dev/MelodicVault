@@ -1045,3 +1045,123 @@ Un álbum sin rating dejaba el valor vacío. Ahora se muestra "—":
 - **ReporteController / SecurityConfig / error.html:** los errores se atrapan y se muestran en una página comprensible, accesible sin sesión.
 - **Vistas:** avisos de lista vacía separados, errores visibles en `form-banda.html`, título dinámico en `form-album.html` y rating nulo mostrado como "—".
 - **Entidades de banda y álbum:** `@Size(max = 255)` en las URL de imagen y portada.
+
+
+# Cambios realizados v7
+
+La aplicación funciona igual para el usuario, pero ahora la eliminación ya no se puede disparar con un simple enlace (protección CSRF) y los detalles de banda y de álbum cargan sus datos en una sola consulta.
+
+---
+
+## 1. Eliminación por POST con token CSRF
+
+**Qué se cambió**
+
+En `BandaController`, `AlbumController` y `CancionController`:
+
+```java
+// antes
+@GetMapping("/eliminar/{id}")
+
+// ahora
+@PostMapping("/eliminar/{id}")
+```
+
+En `bandas.html`, `albumes.html` y `canciones.html`, el enlace Eliminar pasa a ser un formulario:
+
+```html
+<!-- antes -->
+<a th:href="@{/bandas/eliminar/{id}(id=${b.idBanda})}" class="btn-eliminar"
+   onclick="return confirm('...');">Eliminar</a>
+
+<!-- ahora -->
+<form th:action="@{/bandas/eliminar/{id}(id=${b.idBanda})}" method="post" style="display:inline"
+      onsubmit="return confirm('...');">
+    <button type="submit" class="btn-eliminar">Eliminar</button>
+</form>
+```
+
+En `estilos.css` se agregaron reglas para que `button.btn-eliminar` se vea igual que los demás botones de acciones.
+
+**Por qué**
+
+- Un `GET` es una petición sin token CSRF: un Administrador con la sesión abierta podía borrar datos sin querer al abrir un enlace o imagen maliciosa que apuntara a `/bandas/eliminar/5`.
+- Con `POST` y `th:action`, la petición lleva el token CSRF y solo la puede enviar el formulario de la propia aplicación.
+- La confirmación pasa de `onclick` a `onsubmit` del formulario.
+- `SecurityConfig` no cambia: `/*/eliminar/**` sigue exigiendo rol `ADMIN` sin importar el verbo.
+
+---
+
+## 2. Detalle de banda con `@EntityGraph`
+
+**Qué se cambió**
+
+`IBanda` ya tenía (desde la v5, para el reporte) la consulta con `@EntityGraph`:
+
+```java
+@EntityGraph(attributePaths = "albumes")
+Optional<Banda> findWithAlbumesByIdBanda(Integer idBanda);
+```
+
+Ahora `BandaController.detalle` también la usa, a través de `IBandaService.listarConAlbumes`, en lugar de la búsqueda normal.
+
+**Por qué**
+
+- `Banda.albumes` es `LAZY`: la discografía del detalle recorre esa lista, y antes dependía de que la sesión de Hibernate siguiera abierta mientras se pintaba la página (`open-in-view`).
+- Con el graph, la banda y sus álbumes llegan en una sola consulta, antes de la vista.
+
+---
+
+## 3. Detalle de álbum con `@EntityGraph`
+
+**Qué se cambió**
+
+En `IAlbum`:
+
+```java
+@EntityGraph(attributePaths = {"canciones", "banda"})
+Optional<Album> findWithCancionesByIdAlbum(int idAlbum);
+```
+
+Se expone en `IAlbumService` / `AlbumService` y `AlbumController.detalle` lo usa en lugar de la búsqueda anterior.
+
+**Por qué**
+
+- `Album.canciones` es `LAZY`: antes el detalle dependía de que la sesión siguiera abierta mientras la plantilla recorría la lista.
+- Con el graph, el álbum, sus canciones y su banda llegan en una sola consulta, antes de la vista.
+- Se lista `banda` además de `canciones` porque lo que el graph no incluye puede quedar sin cargar; sin ella el detalle lanzaba `LazyInitializationException`.
+
+---
+
+## 4. Qué no cambió
+
+- `SecurityConfig` (las reglas, el login y `/error`).
+- Las rutas de alta, edición y detalle, y las de reportes (el reporte de banda ya usaba el graph desde la v5).
+- Las entidades y la base de datos.
+- Los mensajes de confirmación y de error de eliminación.
+
+---
+
+## Pruebas realizadas
+
+| Prueba | Resultado esperado |
+|---|---|
+| Administrador pulsa Eliminar y confirma (banda, álbum o canción) | Se elimina y redirige al listado con su mensaje |
+| Administrador pega `/bandas/eliminar/5` en la barra de direcciones (GET) | Error 405 (método no permitido) |
+| Lector pega esa misma ruta | Error 403 (no tiene el rol) |
+| Visitante sin sesión pega esa ruta | Redirige a `/login` |
+| Formulario de eliminar sin `th:action` (action plano) | Error 403 (falta el token CSRF) |
+| `/bandas/detalle/{id}` | Muestra la banda con su discografía, sin `LazyInitializationException` |
+| `/albumes/detalle/{id}` | Muestra el álbum con su banda y sus canciones, sin `LazyInitializationException` |
+
+---
+
+## Resumen
+
+- **BandaController / AlbumController / CancionController:** `eliminar` pasa de `GET` a `POST`.
+- **bandas.html / albumes.html / canciones.html:** el enlace Eliminar es ahora un formulario con token CSRF y confirmación.
+- **estilos.css:** estilo del botón de eliminar.
+- **BandaController / IBandaService:** el detalle de banda carga los álbumes con `@EntityGraph` (`listarConAlbumes`).
+- **IAlbum / AlbumService / AlbumController:** el detalle de álbum carga canciones y banda con `@EntityGraph`.
+
+
