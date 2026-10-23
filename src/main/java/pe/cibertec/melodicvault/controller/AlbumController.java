@@ -87,7 +87,7 @@ public class AlbumController {
         return "redirect:/albumes";
     }
 
-    @GetMapping("/eliminar/{id}")
+    @PostMapping("/eliminar/{id}")
     public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
 
         Optional<Album> album = service.listarId(id);

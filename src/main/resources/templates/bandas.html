@@ -116,11 +116,10 @@
 	                    Editar
 	                </a>
 					<!-- bandas.html: el navegador pide confirmación antes de enviar la petición -->
-	                <a th:href="@{/bandas/eliminar/{id}(id=${b.idBanda})}"
-	                   class="btn-eliminar"
-	                   onclick="return confirm('¿Seguro que deseas eliminar esta banda? También se eliminarán sus álbumes asociados.');">
-	                    Eliminar
-	                </a>
+					<form th:action="@{/bandas/eliminar/{id}(id=${b.idBanda})}" method="post" style="display:inline"
+					      onsubmit="return confirm('¿Seguro que deseas eliminar esta banda? También se eliminarán sus álbumes asociados.');">
+					    <button type="submit" class="btn-eliminar">Eliminar</button>
+					</form>
 				 </th:block> 	
 	            </div>
 	        </div>

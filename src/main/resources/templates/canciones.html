@@ -66,11 +66,13 @@
           <td class="dur"
               th:text="${c.duracionSegundos != null} ? ${'' + (c.duracionSegundos / 60) + ':' + #numbers.formatInteger(c.duracionSegundos % 60, 2)} : '—'">4:05</td>
           <td sec:authorize="hasRole('ADMIN')">
-            <div class="acciones-tabla">
-              <a class="btn-editar" th:href="@{/canciones/editar/{id}(id=${c.idCancion})}">Editar</a>
-              <a class="btn-eliminar" th:href="@{/canciones/eliminar/{id}(id=${c.idCancion})}"
-                 onclick="return confirm('¿Eliminar esta canción?')">Eliminar</a>
-            </div>
+			<div class="acciones-tabla">
+			  <a class="btn-editar" th:href="@{/canciones/editar/{id}(id=${c.idCancion})}">Editar</a>
+			  <form th:action="@{/canciones/eliminar/{id}(id=${c.idCancion})}" method="post" style="display:inline"
+			        onsubmit="return confirm('¿Eliminar esta canción?');">
+			    <button type="submit" class="btn-eliminar">Eliminar</button>
+			  </form>
+			</div>
           </td>
         </tr>
       </tbody>

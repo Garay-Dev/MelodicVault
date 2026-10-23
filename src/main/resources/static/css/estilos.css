@@ -412,6 +412,12 @@ footer {
     color: white;
 }
 
+button.btn-eliminar {
+    border: none;
+    font: inherit;
+    cursor: pointer;
+}
+
 @media (max-width: 800px) {
     .acciones-superiores {
         flex-direction: column;
@@ -1618,6 +1624,20 @@ footer {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.acciones-card button.btn-eliminar {
+    padding: 11px 20px !important;
+    border-radius: 24px !important;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.acciones-tabla button.btn-eliminar {
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
 }
 
 @media (max-width: 700px) {

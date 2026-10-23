@@ -116,8 +116,10 @@
 		            <a  th:href="@{/albumes/detalle/{id}(id=${a.idAlbum})}" class="btn-secundario">Ver detalle</a>
 					<th:block sec:authorize="hasRole('ADMIN')">
 		             <a th:href="@{/albumes/editar/{id}(id=${a.idAlbum})}" class="btn-editar">Editar</a>
-		             <a th:href="@{/albumes/eliminar/{id}(id=${a.idAlbum})}" class="btn-eliminar" 
-					 onclick="return confirm('¿Seguro que deseas eliminar este álbum? Esta acción no se puede deshacer.');">Eliminar</a>
+					 <form th:action="@{/albumes/eliminar/{id}(id=${a.idAlbum})}" method="post" style="display:inline"
+					       onsubmit="return confirm('¿Seguro que deseas eliminar este álbum? Esta acción no se puede deshacer.');">
+					     <button type="submit" class="btn-eliminar">Eliminar</button>
+					 </form>
 					</th:block> 
 		        </div>
 		    </div>

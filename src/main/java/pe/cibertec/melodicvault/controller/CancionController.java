@@ -77,7 +77,7 @@ public class CancionController {
         return "redirect:/canciones";
     }
 
-    @GetMapping("/eliminar/{id}")
+    @PostMapping("/eliminar/{id}")
     public String eliminar(@PathVariable("id") int id, RedirectAttributes flash) {
         if (service.listarId(id).isEmpty()) {
             flash.addFlashAttribute("error", "La canción no existe.");
