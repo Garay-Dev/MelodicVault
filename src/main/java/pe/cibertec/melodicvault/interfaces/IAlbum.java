@@ -1,7 +1,9 @@
 package pe.cibertec.melodicvault.interfaces;
 
 import java.util.List;
+import java.util.Optional;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -20,4 +22,8 @@ public interface IAlbum extends CrudRepository<Album, Integer> {
     
     @Query("SELECT c FROM Cancion c WHERE c.album.idAlbum = :id ORDER BY c.numeroPista")
     List<Cancion> listadoDeCanciones(@Param("id") int id);
+    
+    @EntityGraph(attributePaths = {"canciones", "banda"})
+    Optional<Album> findWithCancionesByIdAlbum(int idAlbum);
+    
 }

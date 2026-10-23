@@ -21,4 +21,6 @@ public interface IAlbumService {
     List<Object[]> estadisticas();
     
     List<Cancion> listadoDeCanciones(int id);
+    
+    Optional<Album> findWithCancionesByIdAlbum(int idAlbum);
 }

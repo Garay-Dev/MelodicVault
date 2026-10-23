@@ -105,7 +105,7 @@ public class AlbumController {
     @GetMapping("/detalle/{id}")
     public String detalle(@PathVariable("id") int id, Model model, RedirectAttributes flash) {
 
-        Optional<Album> album = service.listarId(id);
+        Optional<Album> album = service.findWithCancionesByIdAlbum(id);
 
         if (album.isEmpty()) {
             flash.addFlashAttribute("error", "El álbum solicitado no existe.");

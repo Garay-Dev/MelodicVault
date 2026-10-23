@@ -94,7 +94,7 @@ public class BandaController {
 
     @GetMapping("/detalle/{id}")
     public String detalle(@PathVariable("id") int id, Model model, RedirectAttributes flash) {
-        Optional<Banda> banda = service.listarId(id);
+        Optional<Banda> banda = service.listarConAlbumes(id);
 
         if (banda.isEmpty()) {
             flash.addFlashAttribute("error", "La banda solicitada no existe.");

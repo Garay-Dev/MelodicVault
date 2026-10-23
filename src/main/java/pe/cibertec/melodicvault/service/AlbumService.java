@@ -61,5 +61,10 @@ public class AlbumService implements IAlbumService {
     public List<Cancion> listadoDeCanciones(int id) {
         return data.listadoDeCanciones(id);
     }
+
+	@Override
+	public Optional<Album> findWithCancionesByIdAlbum(int idAlbum) {
+		return data.findWithCancionesByIdAlbum(idAlbum);
+	}
     
 }
