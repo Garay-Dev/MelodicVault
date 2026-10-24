@@ -1164,4 +1164,74 @@ Se expone en `IAlbumService` / `AlbumService` y `AlbumController.detalle` lo usa
 - **BandaController / IBandaService:** el detalle de banda carga los álbumes con `@EntityGraph` (`listarConAlbumes`).
 - **IAlbum / AlbumService / AlbumController:** el detalle de álbum carga canciones y banda con `@EntityGraph`.
 
+---
+
+# Cambios realizados v8 : numeración automática de pistas (`AlbumCompletoController.guardar`)
+
+## Problema
+
+En **Álbum con canciones**, las filas sin número de pista se numeraban con un contador que subía en **cada fila con título**, incluso en las que ya traían pista escrita a mano. Mezclar pistas manuales y automáticas podía producir dos canciones con el mismo número.
+
+| Fila | Pista escrita | Resultado (antes) |
+|---|---|---|
+| 1 | 3 | 3 |
+| 2 | (vacía) | 2 |
+| 3 | (vacía) | **3** ← choca con la fila 1 |
+
+Al guardar, `UNIQUE (id_album, numero_pista)` fallaba, `@Transactional` deshacía todo y el usuario veía "No se guardó nada: revisa que no haya pistas repetidas…". Funcionaba como red de seguridad, pero el usuario no había cometido ningún error.
+
+## Código anterior
+
+```java
+List<Cancion> validas = new ArrayList<>();
+int pista = 1;
+for (Cancion c : form.getCanciones()) {
+    if (c.getTitulo() == null || c.getTitulo().isBlank()) continue;
+    if (c.getNumeroPista() == null) c.setNumeroPista(pista);
+    validas.add(c);
+    pista++;                       // sube también si la fila ya traía pista
+}
+```
+
+## Código actual
+
+```java
+List<Cancion> validas = new ArrayList<>();
+Set<Integer> usadas = new HashSet<>();
+
+// 1. Ignora las filas vacías y anota las pistas escritas a mano
+for (Cancion c : form.getCanciones()) {
+    if (c.getTitulo() == null || c.getTitulo().isBlank()) continue;
+    validas.add(c);
+    if (c.getNumeroPista() != null) usadas.add(c.getNumeroPista());
+}
+
+// 2. Las que no tienen pista reciben el primer número libre
+int pista = 1;
+for (Cancion c : validas) {
+    if (c.getNumeroPista() == null) {
+        while (usadas.contains(pista)) pista++;
+        c.setNumeroPista(pista);
+        pista++;
+    }
+}
+```
+
+## Por qué se cambió
+
+- **Dos pasadas.** Hay que conocer todas las pistas escritas a mano **antes** de numerar las vacías; con una sola pasada no se sabe qué números quedarán ocupados más abajo.
+- **`Set<Integer> usadas`.** Guarda las pistas manuales y permite saltarlas con `contains`.
+- **Primer número libre.** El contador solo avanza cuando asigna una pista o encuentra una ocupada.
+- **No se usó una lista fija del 1 al 5.** Un Set funciona aunque el usuario escriba una pista fuera de ese rango (por ejemplo, 10) y no depende del límite de 5 filas.
+
+## Resultado
+
+| Fila | Pista escrita | Antes | Ahora |
+|---|---|---|---|
+| 1 | 3 | 3 | 3 |
+| 2 | (vacía) | 2 | **1** |
+| 3 | (vacía) | 3 (choque) | **2** |
+
+Con todas las pistas vacías el resultado no cambia: 1, 2, 3… en orden, sin huecos por filas vacías.
+
 

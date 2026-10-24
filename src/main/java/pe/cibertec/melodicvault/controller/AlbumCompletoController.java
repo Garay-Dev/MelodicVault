@@ -1,7 +1,10 @@
 package pe.cibertec.melodicvault.controller;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,14 +43,25 @@ public class AlbumCompletoController {
     public String guardar(@Valid @ModelAttribute("form") AlbumCompletoForm form,
                           BindingResult result, Model model, RedirectAttributes flash) {
 
-        // Ignora las filas vacias y numera automáticamente las que no traen pista
+        
         List<Cancion> validas = new ArrayList<>();
-        int pista = 1;
+        Set<Integer> usadas = new HashSet<>();
+
+        //Ignora las filas vacias y numera se anotan las pistas escritas a mano
         for (Cancion c : form.getCanciones()) {
             if (c.getTitulo() == null || c.getTitulo().isBlank()) continue;
-            if (c.getNumeroPista() == null) c.setNumeroPista(pista);
             validas.add(c);
-            pista++;
+            if (c.getNumeroPista() != null) usadas.add(c.getNumeroPista());
+        }
+
+        // Las que no tienen pista reciben el primer número libre
+        int pista = 1;
+        for (Cancion c : validas) {
+            if (c.getNumeroPista() == null) {
+                while (usadas.contains(pista)) pista++;
+                c.setNumeroPista(pista);
+                pista++;
+            }
         }
 
         if (result.hasErrors() || validas.isEmpty()) {
